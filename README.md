@@ -204,12 +204,7 @@ Response:
  - Threat Detection
 
 ---
-📄 Licença
 
-Este projeto está sob a licença MIT.
-Veja o arquivo LICENSE para mais detalhes.
-
-```
-AegisProtocol-Core © 2026
+<div align="center"> <sub>AegisProtocol-Core © 2026
 Desenvolvido com foco em excelência arquitetural, segurança real e engenharia de alto nível.
-```
+</div>
