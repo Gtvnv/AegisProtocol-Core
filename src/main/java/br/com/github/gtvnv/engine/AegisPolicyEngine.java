@@ -1,4 +1,4 @@
-package br.com.github.gtvnv.domain.engine;
+package br.com.github.gtvnv.engine;
 
 import br.com.github.gtvnv.domain.model.AccessContext;
 import br.com.github.gtvnv.domain.policy.PolicyEvaluationResult;

@@ -1,11 +1,10 @@
 package br.com.github.gtvnv.engine;
 
-import br.com.github.gtvnv.domain.policy.Policy;
 import br.com.github.gtvnv.domain.model.AccessContext;
 import br.com.github.gtvnv.domain.policy.*;
+import br.com.github.gtvnv.domain.repository.PolicyRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import br.com.github.gtvnv.domain.engine.AegisPolicyEngine;
 
 import java.util.List;
 
@@ -13,50 +12,57 @@ import java.util.List;
 @Service
 public class DefaultPolicyEngine implements AegisPolicyEngine {
 
-    // Simulação de um repositório (Em prod, isso viria do Redis/Banco com Caching)
-    private final List<Policy> loadedPolicies;
+    private final PolicyRepository policyRepository;
 
-    public DefaultPolicyEngine(List<Policy> loadedPolicies) {
-        this.loadedPolicies = loadedPolicies;
+    // Agora injetamos o Repositório do banco de dados
+    public DefaultPolicyEngine(PolicyRepository policyRepository) {
+        this.policyRepository = policyRepository;
     }
 
     @Override
     public PolicyEvaluationResult evaluate(AccessContext context) {
-        log.debug("Iniciando avaliação de política para: {} -> {}", context.subject().id(), context.resource().identifier());
+        log.debug("Iniciando avaliação de política (DB) para: {} -> {}", context.subject().id(), context.resource().identifier());
 
-        // 1. Encontra a política aplicável (Target Match)
-        // Em um sistema real, isso deve ser otimizado (ex: Trie ou Hash Map) e não linear
-        Policy applicablePolicy = loadedPolicies.stream()
+        // 1. Carrega todas as políticas do Banco e converte para o objeto de Domínio
+        // OBS: Em produção com alto tráfego, aqui adicionaríamos Cache (Redis/Caffeine)
+        // para não fazer SELECT * em toda requisição.
+        List<Policy> activePolicies = policyRepository.findAll().stream()
+                .map(entity -> entity.toDomain())
+                .toList();
+
+        // 2. Encontra a política aplicável (Target Match)
+        Policy applicablePolicy = activePolicies.stream()
                 .filter(policy -> isTargetMatch(policy.target(), context))
                 .sorted((p1, p2) -> Integer.compare(p2.priority(), p1.priority())) // Maior prioridade primeiro
                 .findFirst()
                 .orElse(null);
 
-        // 2. Fallback: Se não tem regra explicita, aplica o "Secure-by-default" (DENY)
+        // 3. Fallback: Se não tem regra explicita, aplica o "Secure-by-default" (DENY)
         if (applicablePolicy == null) {
             log.warn("Nenhuma política encontrada para o recurso. Aplicando Default Deny.");
             return new PolicyEvaluationResult(Effect.DENY, "No matching policy found - Default Deny");
         }
 
-        // 3. Avalia as Condições (ABAC Logic)
+        // 4. Avalia as Condições (ABAC Logic)
         boolean conditionsMet = checkConditions(applicablePolicy.conditions(), context);
 
         if (conditionsMet) {
-            // Se as condições baterem, retorna o efeito da política (geralmente PERMIT, mas pode ser uma regra de DENY explícito)
-            return new PolicyEvaluationResult(applicablePolicy.effect(), "Policy " + applicablePolicy.id() + " satisfied");
+            return new PolicyEvaluationResult(applicablePolicy.effect(), "Policy " + applicablePolicy.name() + " satisfied");
         } else {
-            return new PolicyEvaluationResult(Effect.DENY, "Policy " + applicablePolicy.id() + " conditions failed");
+            return new PolicyEvaluationResult(Effect.DENY, "Policy " + applicablePolicy.name() + " conditions failed");
         }
     }
 
     @Override
     public void refreshPolicies() {
-
+        // Como estamos lendo direto do banco no método evaluate (findAll),
+        // não precisamos recarregar cache manualmente por enquanto.
+        log.info("Refresh solicitado - leitura direta do banco ativa.");
     }
 
+    // --- MÉTODOS AUXILIARES (Lógica Pura - Mantidos Iguais) ---
+
     private boolean isTargetMatch(Target target, AccessContext context) {
-        // Verifica se o recurso atual está na lista de recursos da política
-        // Suporta wildcard básico "*"
         boolean resourceMatch = target.resources().contains("*") ||
                 target.resources().contains(context.resource().identifier());
 
@@ -67,29 +73,23 @@ public class DefaultPolicyEngine implements AegisPolicyEngine {
     }
 
     private boolean checkConditions(List<Condition> conditions, AccessContext context) {
-        if (conditions == null || conditions.isEmpty()) return true; // Sem condições = Acesso livre dentro do Target
+        if (conditions == null || conditions.isEmpty()) return true;
 
         for (Condition condition : conditions) {
             Object contextValue = extractValueFromContext(context, condition.attribute());
             if (!evaluateCondition(contextValue, condition.operator(), condition.value())) {
                 log.debug("Condição falhou: {} {} {} (Valor real: {})",
                         condition.attribute(), condition.operator(), condition.value(), contextValue);
-                return false; // Bastou uma falhar para negar (Lógica AND)
+                return false;
             }
         }
         return true;
     }
 
-    // Extrai o valor dinamicamente. Ex: "subject.attributes.department"
     private Object extractValueFromContext(AccessContext context, String attributePath) {
-        // Implementação simplificada.
-        // Aqui você mapearia "subject.roles" -> context.subject().roles()
-        // "environment.ip" -> context.environment().ipAddress()
-
         if (attributePath.equals("subject.roles")) return context.subject().roles();
         if (attributePath.equals("environment.ip")) return context.environment().ipAddress();
 
-        // Busca genérica nos atributos extras
         if (attributePath.startsWith("subject.attributes.")) {
             String key = attributePath.replace("subject.attributes.", "");
             return context.subject().attributes().get(key);
@@ -117,7 +117,7 @@ public class DefaultPolicyEngine implements AegisPolicyEngine {
         try {
             return Double.compare(Double.parseDouble(v1), Double.parseDouble(v2));
         } catch (NumberFormatException e) {
-            return 0; // Ou lançar erro de configuração
+            return 0;
         }
     }
 }

@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  # 1. Banco de Dados Principal (Audit + Policies)
+  aegis-db:
+    image: postgres:15-alpine
+    container_name: aegis-postgres
+    environment:
+      POSTGRES_DB: aegis_core
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin_password
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - aegis-net
+
+  # 2. Cache e Controle de Sessão (Tokens + Rate Limit)
+  aegis-redis:
+    image: redis:7-alpine
+    container_name: aegis-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - aegis-net
+
+networks:
+  aegis-net:
+    driver: bridge
+
+volumes:
+  postgres_data:

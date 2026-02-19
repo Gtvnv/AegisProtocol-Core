@@ -1,2 +1,44 @@
 server:
   port: 9090
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+    urls:
+      - name: default
+        url: /v3/api-docs
+    disable-swagger-default-url: true
+
+spring:
+  application:
+    name: AegisProtocol-Core
+
+  datasource:
+    url: jdbc:postgresql://localhost:5434/aegis_core
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    # "update" cria/atualiza tabelas automaticamente (Dev).
+    # Em Produção, use "validate" ou "none" (com Flyway/Liquibase).
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    properties:
+      hibernate:
+        format_sql: true
+
+# Configurações Customizadas do Aegis
+aegis:
+  jwt:
+    access-token-expiration: 300       # 5 min
+    refresh-token-expiration: 86400    # 24h
+    # Caminhos relativos à raiz do projeto ou absolutos
+    private-key-path: "keys/private_key.pem"
+    public-key-path: "keys/public_key.pem"

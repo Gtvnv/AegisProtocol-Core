@@ -1,66 +1,103 @@
 package br.com.github.gtvnv.authentication.token;
 
 import br.com.github.gtvnv.config.JwtProperties;
-import br.com.github.gtvnv.domain.model.Subject; // Reutilizando nosso modelo
+import br.com.github.gtvnv.crypto.KeyManagerService;
+import br.com.github.gtvnv.domain.model.Subject; // Importe o Subject
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Function;
 
 @Service
 public class TokenService {
 
     private final JwtProperties jwtProperties;
-    private final KeyProvider keyProvider;
+    private final KeyManagerService keyManagerService;
 
-    public TokenService(JwtProperties jwtProperties, KeyProvider keyProvider) {
+    public TokenService(JwtProperties jwtProperties, KeyManagerService keyManagerService) {
         this.jwtProperties = jwtProperties;
-        this.keyProvider = keyProvider;
+        this.keyManagerService = keyManagerService;
     }
 
     public String generateAccessToken(Subject subject) {
-        Instant now = Instant.now();
-        Instant validity = now.plusSeconds(jwtProperties.getAccessTokenExpiration());
+        Map<String, Object> extraClaims = new HashMap<>();
+        extraClaims.put("roles", subject.roles());
+        extraClaims.put("type", "ACCESS");
+        extraClaims.put("verified", subject.isVerified());
 
-        // Claims Customizadas (Roles, Departamento, etc)
-        Map<String, Object> claims = new HashMap<>();
-        claims.put("roles", subject.roles());
-        claims.put("type", "ACCESS"); // Importante diferenciar de Refresh Token
-
-        return Jwts.builder()
-                .subject(subject.id())
-                .claims(claims)
-                .issuedAt(Date.from(now))
-                .expiration(Date.from(validity))
-                .signWith(keyProvider.getKeyPair().getPrivate()) // Assina com Chave Privada
-                .compact();
+        // Usa o tempo definido no application.yml via JwtProperties
+        return buildToken(subject.id(), extraClaims, jwtProperties.getAccessTokenExpiration());
     }
 
-    // O Refresh Token deve ser opaco ou um JWT com menos claims
-    public String generateRefreshToken(String userId) {
-        Instant now = Instant.now();
-        Instant validity = now.plusSeconds(jwtProperties.getRefreshTokenExpiration());
+    public String generateRefreshToken(String username) {
+        Map<String, Object> extraClaims = new HashMap<>();
+        extraClaims.put("type", "REFRESH");
 
-        return Jwts.builder()
-                .subject(userId)
-                .claim("type", "REFRESH")
-                .issuedAt(Date.from(now))
-                .expiration(Date.from(validity))
-                .signWith(keyProvider.getKeyPair().getPrivate())
-                .compact();
+        return buildToken(username, extraClaims, jwtProperties.getRefreshTokenExpiration());
     }
 
-    // Validação e Extração de dados
+    private String buildToken(String subject, Map<String, Object> extraClaims, long expirationSeconds) {
+        Instant now = Instant.now();
+        Instant validity = now.plusSeconds(expirationSeconds);
+
+        return Jwts.builder()
+                .subject(subject)
+                .claims(extraClaims)
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(validity))
+                // 🔥 Usa o KeyManagerService
+                .signWith(keyManagerService.getPrivateKey(), Jwts.SIG.RS256)
+                .compact();
+    }
+    
+
     public Claims validateAndGetClaims(String token) {
-        // Se o token for inválido, expirado ou assinatura falsa, o JJWT lança exceção automaticamente
         return Jwts.parser()
-                .verifyWith(keyProvider.getKeyPair().getPublic()) // Valida com Chave Pública
+                // 🔥 Usa o KeyManagerService
+                .verifyWith(keyManagerService.getPublicKey())
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
     }
+
+    // --- Métodos de Extração e Validação (Mantidos) ---
+
+    public String extractUsername(String token) {
+        return extractClaim(token, Claims::getSubject);
+    }
+
+    public Date extractExpiration(String token) {
+        return extractClaim(token, Claims::getExpiration);
+    }
+
+    public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
+        final Claims claims = validateAndGetClaims(token);
+        return claimsResolver.apply(claims);
+    }
+
+    public boolean isTokenValid(String token, UserDetails userDetails) {
+        final String username = extractUsername(token);
+        return (username.equals(userDetails.getUsername()) && !isTokenExpired(token));
+    }
+
+    private boolean isTokenExpired(String token) {
+        return extractExpiration(token).before(new Date());
+    }
+
+    public boolean isRefreshToken(String token) {
+        try {
+            String type = extractClaim(token, claims -> claims.get("type", String.class));
+            return "REFRESH".equals(type);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
 }

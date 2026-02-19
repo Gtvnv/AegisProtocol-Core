@@ -7,5 +7,11 @@ import java.util.Map;
 public record Subject(
         String id,
         List<String> roles,
-        Map<String, Object> attributes
-) {}
+        Map<String, Object> attributes,
+        boolean isVerified // ✅ NOVO CAMPO
+) {
+    // Construtor compacto para manter compatibilidade (opcional, mas útil)
+    public Subject(String id, List<String> roles, Map<String, Object> attributes) {
+        this(id, roles, attributes, false); // Padrão false se não informado
+    }
+}

@@ -27,3 +27,16 @@ bin/
 
 ### Mac OS ###
 .DS_Store
+
+# Ignorar arquivos de chaves (Elas devem ser geradas no deploy, nunca versionadas)
+keys/
+*.pem
+*.key
+
+# Ignorar IDEs e Builds
+.idea/
+target/
+*.iml
+.mvn/
+mvnw
+mvnw.cmd
