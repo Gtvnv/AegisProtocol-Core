@@ -1,6 +1,7 @@
 package br.com.github.gtvnv.config.interceptor;
 
 import br.com.github.gtvnv.audit.event.SecurityAuditEvent;
+import br.com.github.gtvnv.config.security.AegisAuthenticationDetails;
 import br.com.github.gtvnv.domain.model.AccessContext;
 import br.com.github.gtvnv.domain.model.Environment;
 import br.com.github.gtvnv.domain.model.Resource;
@@ -99,15 +100,20 @@ public class AegisSecurityInterceptor implements HandlerInterceptor {
     private AccessContext buildContext(HttpServletRequest request, Authentication auth) {
         List<String> roles = new ArrayList<>();
         for (GrantedAuthority a : auth.getAuthorities()) {
-            String role = a.getAuthority().replace("ROLE_", "");
-            roles.add(role);
+            roles.add(a.getAuthority().replace("ROLE_", ""));
         }
 
-        Subject subject = new Subject(auth.getName(), roles, Collections.emptyMap());
+        // Lê isVerified diretamente das claims JWT — evita o bug do MVP onde
+        // o construtor de 3 args defaultava isVerified=false para todos os usuários.
+        boolean isVerified = false;
+        if (auth.getDetails() instanceof AegisAuthenticationDetails details) {
+            isVerified = details.isVerified();
+        }
+
+        Subject subject = new Subject(auth.getName(), roles, Collections.emptyMap(), isVerified);
         Resource resource = new Resource(request.getRequestURI(), "API_ENDPOINT", "HIGH");
-        String action = request.getMethod();
         Environment env = new Environment(request.getRemoteAddr(), Instant.now(), 0);
 
-        return new AccessContext(subject, resource, action, env);
+        return new AccessContext(subject, resource, request.getMethod(), env);
     }
 }

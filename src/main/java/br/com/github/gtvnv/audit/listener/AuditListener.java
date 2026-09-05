@@ -1,5 +1,7 @@
 package br.com.github.gtvnv.audit.listener;
 
+import br.com.github.gtvnv.audit.chain.domain.AuditEventType;
+import br.com.github.gtvnv.audit.chain.service.AuditEventPublisher;
 import br.com.github.gtvnv.audit.domain.AuditLog;
 import br.com.github.gtvnv.audit.event.SecurityAuditEvent;
 import br.com.github.gtvnv.audit.repository.AuditLogRepository;
@@ -20,6 +22,7 @@ import java.time.ZoneId;
 public class AuditListener {
 
     private final AuditLogRepository repository;
+    private final AuditEventPublisher chainPublisher;
 
     @Async // Executa em thread separada (Assíncrono)
     @EventListener // Escuta o evento disparado pelo Interceptor
@@ -44,10 +47,16 @@ public class AuditListener {
             // 🔥 ALTERAÇÃO 1: saveAndFlush
             // Força o insert no banco IMEDIATAMENTE. Se houver erro de SQL, estoura aqui e cai no catch.
             repository.saveAndFlush(auditLog);
-
-            // 🔥 ALTERAÇÃO 2: log.info
-            // Mudamos de DEBUG para INFO para garantir que apareça no console.
             log.info("✅ Audit Log salvo com sucesso ID: {}", auditLog.getId());
+
+            AuditEventType chainType = event.isAllowed()
+                    ? AuditEventType.ABAC_DECISION_PERMIT
+                    : AuditEventType.ABAC_DECISION_DENY;
+            chainPublisher.publishAbacEvent(chainType,
+                    context.subject().id(),
+                    context.resource().identifier(),
+                    context.action(),
+                    event.getReason());
 
         } catch (Exception e) {
             // Agora sim veremos o erro real se o banco rejeitar o dado

@@ -39,6 +39,24 @@ aegis:
   jwt:
     access-token-expiration: 300       # 5 min
     refresh-token-expiration: 86400    # 24h
-    # Caminhos relativos à raiz do projeto ou absolutos
     private-key-path: "keys/private_key.pem"
     public-key-path: "keys/public_key.pem"
+
+  # S.H.I.E.L.D. — Secure Host Intelligence for Enterprise Lateral Detection
+  shield:
+    enabled: true
+    block-threshold: CRITICAL          # Bloqueia requisição neste nível (NONE/LOW/MEDIUM/HIGH/CRITICAL)
+    alert-threshold: HIGH              # Persiste alerta a partir deste nível
+    lateral-movement-resource-limit: 10 # Recursos distintos por sessão antes de acionar detecção
+    session-window-minutes: 30         # Janela de análise (minutos)
+    score-per-extra-ip: 20             # Penalidade por IP extra no mesmo JTI
+    score-per-extra-agent: 10          # Penalidade por User-Agent extra no mesmo JTI
+    score-lateral-movement: 35         # Penalidade ao detectar movimento lateral
+    score-fingerprint-mismatch: 25     # Penalidade por divergência de fingerprint
+
+  # Ômega — Cryptographic Audit Chain
+  audit:
+    chain:
+      enabled: true
+      verify-on-startup: false          # true ativará verificação forense na inicialização (lento em prod)
+      max-payload-size-bytes: 4096      # Limite de payload JSON por entry

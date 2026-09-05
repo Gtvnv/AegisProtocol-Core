@@ -1,8 +1,12 @@
 package br.com.github.gtvnv.authentication.filter;
 
+import br.com.github.gtvnv.audit.chain.domain.AuditEventType;
+import br.com.github.gtvnv.audit.chain.service.AuditEventPublisher;
 import br.com.github.gtvnv.authentication.service.AegisUserDetailsService;
 import br.com.github.gtvnv.authentication.revocation.TokenBlacklistService;
 import br.com.github.gtvnv.authentication.token.TokenService;
+import br.com.github.gtvnv.config.security.AegisAuthenticationDetails;
+import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -11,7 +15,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -23,7 +26,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final TokenService tokenService;
     private final AegisUserDetailsService userDetailsService;
-    private final TokenBlacklistService blacklistService; // Injeção do novo serviço
+    private final TokenBlacklistService blacklistService;
+    private final AuditEventPublisher chainPublisher;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -31,54 +35,54 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     FilterChain filterChain) throws ServletException, IOException {
 
         final String authHeader = request.getHeader("Authorization");
-        final String jwt;
-        final String userEmail;
 
-        // 1. Verifica se o header existe e começa com Bearer
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        jwt = authHeader.substring(7);
+        final String jwt = authHeader.substring(7);
 
-        // 2. 🔥 CHECKLIST DE REVOGAÇÃO (FAIL-FAST)
-        // Verificamos o Redis ANTES de gastar recursos validando assinatura ou buscando no banco.
+        // Fast-fail: token revogado antes de qualquer parse custoso
         if (blacklistService.isTokenBlacklisted(jwt)) {
+            chainPublisher.publishTokenEvent(AuditEventType.TOKEN_BLACKLIST_VIOLATION,
+                    "ANONYMOUS", null, request.getRemoteAddr());
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setContentType("application/json");
-            response.getWriter().write("{\"error\": \"Token revoked or expired (Blacklisted)\"}");
-            return; // ⛔ Aborta a requisição aqui mesmo
+            response.getWriter().write("{\"error\": \"Token revoked or expired\"}");
+            return;
         }
 
-        // 3. Extrai o usuário do token
+        final Claims claims;
         try {
-            userEmail = tokenService.extractUsername(jwt);
+            claims = tokenService.validateAndGetClaims(jwt);
         } catch (Exception e) {
-            // Se o token for inválido/expirado, o parser do JWT lança exceção.
-            // Apenas seguimos o fluxo (o contexto ficará vazio e retornará 403 depois).
+            // Token inválido ou expirado: segue sem autenticar (Security retorna 401/403)
             filterChain.doFilter(request, response);
             return;
         }
 
-        // 4. Fluxo de Autenticação Padrão
+        // Rejeita Refresh Tokens usados como Access Tokens (vuln crítica do MVP)
+        if (!"ACCESS".equals(claims.get("type", String.class))) {
+            chainPublisher.publishTokenEvent(AuditEventType.REFRESH_TOKEN_USED_AS_ACCESS,
+                    claims.getSubject(), claims.getId(), request.getRemoteAddr());
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        final String userEmail = claims.getSubject();
+
         if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+            UserDetails userDetails = userDetailsService.loadUserByUsername(userEmail);
 
-            // Busca o usuário no banco
-            UserDetails userDetails = this.userDetailsService.loadUserByUsername(userEmail);
-
-            // Valida a assinatura e se pertence ao usuário
             if (tokenService.isTokenValid(jwt, userDetails)) {
-
                 UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
                         userDetails,
                         null,
                         userDetails.getAuthorities()
                 );
-
-                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-
-                // Coloca o usuário autenticado no contexto para o resto da aplicação
+                // Propaga claims (isVerified, jti, type) pelo SecurityContext
+                authToken.setDetails(new AegisAuthenticationDetails(request, claims));
                 SecurityContextHolder.getContext().setAuthentication(authToken);
             }
         }
