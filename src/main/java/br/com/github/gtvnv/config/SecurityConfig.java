@@ -1,6 +1,7 @@
 package br.com.github.gtvnv.config;
 
 import br.com.github.gtvnv.authentication.filter.JwtAuthenticationFilter;
+import br.com.github.gtvnv.shield.filter.ShieldFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -28,9 +29,12 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final ShieldFilter shieldFilter;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
+                          ShieldFilter shieldFilter) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+        this.shieldFilter = shieldFilter;
     }
 
     @Bean
@@ -85,6 +89,18 @@ public class SecurityConfig {
 
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
+                .headers(headers -> headers
+                        .frameOptions(frame -> frame.deny())
+                        .contentTypeOptions(cto -> {})
+                        .httpStrictTransportSecurity(hsts -> hsts
+                                .includeSubDomains(true)
+                                .maxAgeInSeconds(31_536_000)
+                        )
+                        .contentSecurityPolicy(csp ->
+                                csp.policyDirectives("default-src 'self'; frame-ancestors 'none'; object-src 'none'")
+                        )
+                )
+
                 .authorizeHttpRequests(authorize -> authorize
                         // 1. Endpoints Públicos de Autenticação
                         .requestMatchers(HttpMethod.POST, "/auth/login", "/auth/register", "/auth/refresh", "/auth/logout").permitAll()
@@ -106,6 +122,7 @@ public class SecurityConfig {
                 )
 
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(shieldFilter, JwtAuthenticationFilter.class)
                 .build();
     }
 }

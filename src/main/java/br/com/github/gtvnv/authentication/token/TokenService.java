@@ -13,6 +13,7 @@ import java.time.Instant;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.Function;
 
 @Service
@@ -48,11 +49,11 @@ public class TokenService {
         Instant validity = now.plusSeconds(expirationSeconds);
 
         return Jwts.builder()
+                .id(UUID.randomUUID().toString())
                 .subject(subject)
                 .claims(extraClaims)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(validity))
-                // 🔥 Usa o KeyManagerService
                 .signWith(keyManagerService.getPrivateKey(), Jwts.SIG.RS256)
                 .compact();
     }
@@ -98,6 +99,14 @@ public class TokenService {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    public String extractTokenType(String token) {
+        return extractClaim(token, claims -> claims.get("type", String.class));
+    }
+
+    public String extractJti(String token) {
+        return extractClaim(token, Claims::getId);
     }
 
 }

@@ -1,5 +1,7 @@
 package br.com.github.gtvnv.authentication;
 
+import br.com.github.gtvnv.audit.chain.domain.AuditEventType;
+import br.com.github.gtvnv.audit.chain.service.AuditEventPublisher;
 import br.com.github.gtvnv.authentication.dto.LoginRequest;
 import br.com.github.gtvnv.authentication.dto.RegisterRequest;
 import br.com.github.gtvnv.authentication.dto.TokenResponse;
@@ -9,6 +11,7 @@ import br.com.github.gtvnv.config.JwtProperties;
 import br.com.github.gtvnv.domain.entity.UserEntity;
 import br.com.github.gtvnv.domain.model.Subject;
 import br.com.github.gtvnv.domain.repository.UserRepository;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -18,7 +21,10 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -34,6 +40,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final TokenBlacklistService tokenBlacklistService;
     private final AuthenticationManager authenticationManager;
+    private final AuditEventPublisher chainPublisher;
 
 
     public TokenResponse login(LoginRequest request) {
@@ -41,9 +48,17 @@ public class AuthService {
 
         // 1. O Spring valida a senha.
         // Como configuramos .disabled(false) no UserDetails, ele VAI passar se a senha estiver certa.
-        Authentication authenticate = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.username(), request.password())
-        );
+        Authentication authenticate;
+        try {
+            authenticate = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.username(), request.password())
+            );
+        } catch (Exception authEx) {
+            chainPublisher.publishAuthEvent(AuditEventType.LOGIN_FAILURE,
+                    request.username(), resolveClientIp(), null,
+                    "Authentication failed: " + authEx.getClass().getSimpleName());
+            throw authEx;
+        }
         UserDetails userDetails = (UserDetails) authenticate.getPrincipal();
         // 2. 🔥 BUSCA A VERDADE REAL NO BANCO
         // Não confiamos no 'userDetails.isEnabled()' pois forçamos ele a ser true para logar.
@@ -65,6 +80,12 @@ public class AuthService {
         );
         String accessToken = tokenService.generateAccessToken(subject);
         String refreshToken = tokenService.generateRefreshToken(subject.id());
+        String jti = tokenService.extractJti(accessToken);
+        chainPublisher.publishAuthEvent(AuditEventType.LOGIN_SUCCESS,
+                subject.id(), resolveClientIp(), jti, "Login successful, verified=" + isEmailVerified);
+        chainPublisher.publishTokenEvent(AuditEventType.TOKEN_ISSUED, subject.id(), jti, resolveClientIp());
+        chainPublisher.publishTokenEvent(AuditEventType.REFRESH_TOKEN_ISSUED, subject.id(),
+                tokenService.extractJti(refreshToken), resolveClientIp());
         log.info("Login realizado. Verified Status: {}", isEmailVerified);
         return new TokenResponse(
                 accessToken,
@@ -90,6 +111,9 @@ public class AuthService {
                 .build();
 
         userRepository.save(newUser);
+        chainPublisher.publishAuthEvent(AuditEventType.ACCOUNT_CREATED,
+                newUser.getUsername(), resolveClientIp(), null,
+                "Account created, email verification pending");
 
         // Chama o login. Graças ao AegisUserDetailsService.disabled(false), o login funciona.
         // Graças à busca extra no login(), o token sai com "verified": false.
@@ -138,12 +162,35 @@ public class AuthService {
 
         String newAccessToken = tokenService.generateAccessToken(subject);
 
+        // Refresh token rotation: blacklista o token usado e emite um novo.
+        // Se o token antigo aparecer novamente, o blacklist o rejeita — detecta roubo de token.
+        Date oldExpiry = tokenService.extractExpiration(token);
+        long ttlSeconds = Math.max(0, (oldExpiry.getTime() - System.currentTimeMillis()) / 1000);
+        if (ttlSeconds > 0) {
+            tokenBlacklistService.blacklistToken(token, ttlSeconds);
+        }
+        String newRefreshToken = tokenService.generateRefreshToken(user.getUsername());
+        String newJti = tokenService.extractJti(newAccessToken);
+        chainPublisher.publishTokenEvent(AuditEventType.TOKEN_REFRESHED,
+                user.getUsername(), newJti, resolveClientIp());
+        chainPublisher.publishTokenEvent(AuditEventType.REFRESH_TOKEN_ISSUED,
+                user.getUsername(), tokenService.extractJti(newRefreshToken), resolveClientIp());
+
         return new TokenResponse(
                 newAccessToken,
-                token, // Devolvemos o mesmo refresh token (ou gere um novo para rotação)
+                newRefreshToken,
                 "Bearer",
                 jwtProperties.getAccessTokenExpiration()
         );
     }
 
+    private String resolveClientIp() {
+        try {
+            HttpServletRequest req = ((ServletRequestAttributes)
+                    RequestContextHolder.currentRequestAttributes()).getRequest();
+            return req.getRemoteAddr();
+        } catch (Exception e) {
+            return "unknown";
+        }
+    }
 }

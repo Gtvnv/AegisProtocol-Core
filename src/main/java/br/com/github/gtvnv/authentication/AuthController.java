@@ -1,5 +1,7 @@
 package br.com.github.gtvnv.authentication;
 
+import br.com.github.gtvnv.audit.chain.domain.AuditEventType;
+import br.com.github.gtvnv.audit.chain.service.AuditEventPublisher;
 import br.com.github.gtvnv.authentication.dto.LoginRequest;
 import br.com.github.gtvnv.authentication.dto.RegisterRequest;
 import br.com.github.gtvnv.authentication.dto.TokenResponse;
@@ -29,22 +31,30 @@ public class AuthController {
     private final TokenService tokenService;
     private final ThreatService threatService;
     private final KeyManagerService keyManagerService;
+    private final AuditEventPublisher chainPublisher;
 
-    // Injeção via construtor
     public AuthController(AuthService authService,
                           TokenBlacklistService blacklistService,
-                          TokenService tokenService, ThreatService threatService,
-                          KeyManagerService keyManagerService) {
+                          TokenService tokenService,
+                          ThreatService threatService,
+                          KeyManagerService keyManagerService,
+                          AuditEventPublisher chainPublisher) {
         this.authService = authService;
         this.blacklistService = blacklistService;
         this.tokenService = tokenService;
         this.threatService = threatService;
         this.keyManagerService = keyManagerService;
+        this.chainPublisher = chainPublisher;
     }
 
     @PostMapping("/login")
-    public ResponseEntity<TokenResponse> login(@Valid @RequestBody LoginRequest request) {
-        return ResponseEntity.ok(authService.login(request));
+    public ResponseEntity<TokenResponse> login(@Valid @RequestBody LoginRequest request,
+                                               HttpServletRequest httpRequest) {
+        String clientIp = httpRequest.getRemoteAddr();
+        threatService.checkLoginAttempts(clientIp);
+        TokenResponse response = authService.login(request);
+        threatService.clearLoginAttempts(clientIp);
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/register")
@@ -93,6 +103,11 @@ public class AuthController {
                 if (ttlSeconds > 0) {
                     blacklistService.blacklistToken(token, ttlSeconds);
                 }
+                chainPublisher.publishAuthEvent(AuditEventType.LOGOUT_SUCCESS,
+                        tokenService.extractUsername(token),
+                        request.getRemoteAddr(),
+                        tokenService.extractJti(token),
+                        "Token blacklisted");
             } catch (Exception e) {
                 // SonarLint Fix: Idempotência.
                 // Se o token já expirou, o logout "já aconteceu" tecnicamente.
