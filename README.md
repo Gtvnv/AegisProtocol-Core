@@ -1,4 +1,4 @@
-# 🛡️ Aegis Protocol - Core Identity Provider (v1.0.0)
+# 🛡️ Aegis Protocol - Core Identity Provider (v1.2.0)
 
 > **Security & IAM Middleware**
 > Uma iniciativa [ZenithCode](https://github.com/gtvnv) mantida pela divisão N.Ú.C.L.E.O.
