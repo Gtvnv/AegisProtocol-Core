@@ -76,6 +76,11 @@ O AegisProtocol opera sob o modelo Zero Trust, garantindo que nenhum acesso seja
   <sub>Blindando o amanhã, uma conexão por vez. 🚀</sub>
 </div>
 
+> **Nota:** Este repositório contém uma versão antiga do AegisProtocol, mantida pública como referência de arquitetura (Zero Trust, JWT RS256, revogação via Redis). O desenvolvimento ativo do projeto segue em um repositório privado.
+
+**Status:** 🚧 Em desenvolvimento
+
+
 ---
 
 *Desenvolvido com ❤️ em 2026*
