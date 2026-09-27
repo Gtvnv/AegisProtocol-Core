@@ -75,6 +75,15 @@ public class AuditEventPublisher {
                 Map.of("eventCategory", "RETENTION", "checkpointId", nullSafe(checkpointId), "entryCount", entryCount));
     }
 
+    public void publishIncidentEvent(AuditEventType type,
+                                     String actor,
+                                     String incidentId,
+                                     String detail) {
+        publish(type, actor, null, null, null, null,
+                detail,
+                Map.of("eventCategory", "INCIDENT", "incidentId", nullSafe(incidentId)));
+    }
+
     public void publishKeyEvent(AuditEventType type,
                                 String actor,
                                 String kid,
