@@ -44,7 +44,7 @@ class AuditHashEngineTest {
         String hash = engine.compute(ID, TS, ACTOR, ET, PAYLOAD, PREV_HASH);
         assertThat(hash)
             .hasSize(64)
-            .matches("[0-9a-f]+", "deve conter apenas hex lowercase");
+            .matches("[0-9a-f]+"); // deve conter apenas hex lowercase
     }
 
     // -----------------------------------------------------------------------

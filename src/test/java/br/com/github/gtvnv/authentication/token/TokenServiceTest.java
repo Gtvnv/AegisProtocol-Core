@@ -56,6 +56,10 @@ class TokenServiceTest {
         // Isso evita o erro "UnnecessaryStubbingException" do Mockito.
         lenient().when(keyManagerService.getPrivateKey()).thenReturn((RSAPrivateKey) keyPair.getPrivate());
         lenient().when(keyManagerService.getPublicKey()).thenReturn((RSAPublicKey) keyPair.getPublic());
+        // Satélite KMS/Secrets: assinatura carrega um 'kid' no header, e a verificação
+        // resolve a chave pública a partir dele (ver TokenService#resolveVerificationKey).
+        lenient().when(keyManagerService.getCurrentKid()).thenReturn("test-kid");
+        lenient().when(keyManagerService.getVerificationKey("test-kid")).thenReturn((RSAPublicKey) keyPair.getPublic());
 
         // Configura o JwtProperties para retornar os tempos de expiração
         lenient().when(jwtProperties.getAccessTokenExpiration()).thenReturn(3600L); // 1 hora (segundos)

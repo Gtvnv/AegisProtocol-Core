@@ -25,5 +25,8 @@ public enum AuditEventType {
 
     // S.H.I.E.L.D.
     SHIELD_ALERT_TRIGGERED,
-    SHIELD_REQUEST_BLOCKED
+    SHIELD_REQUEST_BLOCKED,
+
+    // KMS/Secrets — rotação de chave de assinatura
+    SIGNING_KEY_ROTATED
 }

@@ -41,6 +41,7 @@ aegis:
     refresh-token-expiration: 86400    # 24h
     private-key-path: "keys/private_key.pem"
     public-key-path: "keys/public_key.pem"
+    key-retention-count: 3             # Chaves válidas p/ verificação (atual + anteriores). Cubra >= refresh-token-expiration
 
   # S.H.I.E.L.D. — Secure Host Intelligence for Enterprise Lateral Detection
   shield:

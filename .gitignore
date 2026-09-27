@@ -32,6 +32,9 @@ bin/
 keys/
 *.pem
 *.key
+# Exceção: par RSA fixo usado só em teste (KeyManagerServiceTest), sem valor real —
+# fica no classpath de propósito para simular uma fonte de chave somente-leitura.
+!src/test/resources/testkeys/*.pem
 
 # Ignorar IDEs e Builds
 .idea/
