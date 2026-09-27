@@ -10,6 +10,7 @@ public enum AuditEventType {
     ACCOUNT_DELETED,
     CONSENT_GIVEN,
     CONSENT_WITHDRAWN,
+    RETENTION_CHECKPOINT_CREATED,
 
     // Tokens
     TOKEN_ISSUED,
