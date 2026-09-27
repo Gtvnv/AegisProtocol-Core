@@ -88,3 +88,14 @@ aegis:
     acknowledge-sla-hours-high: 24
     notify-sla-hours-high: 72
     sla-check-cron: "0 */15 * * * *"   # a cada 15 min
+
+  # Network Sentinel — perímetro de rede pros caminhos protegidos. Zonas
+  # cadastradas via POST /api/admin/network/zones (fail-open se nenhuma existir).
+  network:
+    sentinel-enabled: true
+    protected-path-patterns:
+      - "/api/admin/**"
+    block-on-untrusted-source: false   # alerta primeiro; ligue quando tiver confiança nas zonas cadastradas
+    cors-allowed-origins:
+      - "http://localhost:4200"
+      - "http://localhost:3000"
