@@ -8,6 +8,11 @@
 -- OBJETIVO: Impedir que o usuário da aplicação (aegis_app_user) altere ou
 -- delete qualquer entry da cadeia criptográfica. INSERT e SELECT permanecem.
 -- Adulterações só seriam possíveis como superuser — detectável via log do DBA.
+--
+-- ESCOPO: só audit_chain_entries. A tabela privacy_subject_keys (satélite
+-- IAM Self-Service / PrivacyGate) fica de FORA de propósito — ela precisa
+-- aceitar DELETE, é o mecanismo de crypto-shredding do direito ao
+-- esquecimento (LGPD Art. 18 / GDPR Art. 17). NÃO aplique este hardening lá.
 -- =============================================================================
 
 -- 1. Revogar UPDATE e DELETE do usuário da aplicação
