@@ -7,6 +7,7 @@ public enum AuditEventType {
     LOGIN_FAILURE,
     LOGOUT_SUCCESS,
     ACCOUNT_CREATED,
+    ACCOUNT_DELETED,
 
     // Tokens
     TOKEN_ISSUED,
