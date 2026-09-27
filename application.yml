@@ -68,3 +68,12 @@ aegis:
   consent:
     current-version: "1.0"
     document-url: "https://aegisprotocol.example/legal/terms-privacy-v1.0"
+
+  # Retention Engine — arquivamento (nunca DELETE) de entries do Ômega fora
+  # da janela de retenção. Ver RetentionProperties para o porquê.
+  retention:
+    enabled: true
+    chain-retention-days: 365
+    archive-dir: "audit-archive"
+    batch-size: 500
+    cron: "0 0 2 * * *"          # 02:00 todo dia

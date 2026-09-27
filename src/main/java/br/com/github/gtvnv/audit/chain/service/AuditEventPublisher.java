@@ -66,6 +66,15 @@ public class AuditEventPublisher {
                 Map.of("eventCategory", "CONSENT", "version", nullSafe(version)));
     }
 
+    public void publishRetentionEvent(AuditEventType type,
+                                      String actor,
+                                      String checkpointId,
+                                      int entryCount) {
+        publish(type, actor, null, null, null, null,
+                type.name() + " actor=" + actor + " entries=" + entryCount,
+                Map.of("eventCategory", "RETENTION", "checkpointId", nullSafe(checkpointId), "entryCount", entryCount));
+    }
+
     public void publishKeyEvent(AuditEventType type,
                                 String actor,
                                 String kid,

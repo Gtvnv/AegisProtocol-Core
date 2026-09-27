@@ -43,3 +43,7 @@ target/
 .mvn/
 mvnw
 mvnw.cmd
+
+# Retention Engine: arquivos locais gerados em runtime, nunca versionados
+# (em produção isso vai para um bucket/volume externo, não para o repo)
+audit-archive/

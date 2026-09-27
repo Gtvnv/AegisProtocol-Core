@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -29,4 +30,10 @@ public interface AuditChainRepository extends JpaRepository<AuditChainEntry, Str
 
     @Query("SELECT DISTINCT e.actor FROM AuditChainEntry e")
     List<String> findAllDistinctActors();
+
+    // Usado pelo Retention Engine: próximo lote a arquivar para um ator —
+    // fora da janela de retenção e ainda não coberto por nenhum checkpoint
+    // anterior (sequenceNumber > afterSequence).
+    List<AuditChainEntry> findByActorAndTimestampBeforeAndSequenceNumberGreaterThanOrderBySequenceNumberAsc(
+            String actor, Instant cutoff, long afterSequence, Pageable pageable);
 }
