@@ -2,6 +2,7 @@ package br.com.github.gtvnv.authentication;
 
 import br.com.github.gtvnv.audit.chain.domain.AuditEventType;
 import br.com.github.gtvnv.audit.chain.service.AuditEventPublisher;
+import br.com.github.gtvnv.consent.service.ConsentService;
 import br.com.github.gtvnv.authentication.dto.LoginRequest;
 import br.com.github.gtvnv.authentication.dto.RegisterRequest;
 import br.com.github.gtvnv.authentication.dto.TokenResponse;
@@ -41,6 +42,7 @@ public class AuthService {
     private final TokenBlacklistService tokenBlacklistService;
     private final AuthenticationManager authenticationManager;
     private final AuditEventPublisher chainPublisher;
+    private final ConsentService consentService;
 
 
     public TokenResponse login(LoginRequest request) {
@@ -96,6 +98,11 @@ public class AuthService {
     }
 
     public TokenResponse register(RegisterRequest request) {
+        // Fail fast: sem efeito colateral, só valida a versão de consentimento
+        // ANTES de criar qualquer coisa (evita registro de consentimento órfão
+        // se o cadastro falhar por outro motivo mais adiante).
+        consentService.validateVersion(request.consentVersion());
+
         if (userRepository.existsByUsername(request.username())) {
             throw new IllegalArgumentException("Username already exists");
         }
@@ -111,8 +118,10 @@ public class AuthService {
                 .build();
 
         userRepository.save(newUser);
+        String clientIp = resolveClientIp();
+        consentService.recordConsent(newUser.getUsername(), request.consentVersion(), clientIp);
         chainPublisher.publishAuthEvent(AuditEventType.ACCOUNT_CREATED,
-                newUser.getUsername(), resolveClientIp(), null,
+                newUser.getUsername(), clientIp, null,
                 "Account created, email verification pending");
 
         // Chama o login. Graças ao AegisUserDetailsService.disabled(false), o login funciona.

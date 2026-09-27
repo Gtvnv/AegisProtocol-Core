@@ -22,5 +22,8 @@ public record RegisterRequest(
         @Email(message = "Invalid email format")
         String email,
 
-        Set<String> roles
+        Set<String> roles,
+
+        @NotBlank(message = "consentVersion is required — see GET /auth/consent/current-version")
+        String consentVersion
 ) {}

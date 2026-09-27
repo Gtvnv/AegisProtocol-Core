@@ -40,11 +40,13 @@ docker run -p 9090:9090 aegis-core:v1
 ```
 POST /auth/login - Autenticação e emissão de JWT.
 
-POST /auth/register - Registro com proteção anti-spam.
+POST /auth/register - Registro com proteção anti-spam. Exige consentVersion (ver GET /auth/consent/current-version).
 
 POST /auth/refresh - Renovação de sessão segura.
 
 GET /auth/public-key - Exposição da JWK (Public Key) para microsserviços satélites.
+
+GET /auth/consent/current-version - Versão vigente dos termos que o registro exige.
 ```
 
 ---

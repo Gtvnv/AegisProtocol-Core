@@ -104,7 +104,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         // 1. Endpoints Públicos de Autenticação
                         .requestMatchers(HttpMethod.POST, "/auth/login", "/auth/register", "/auth/refresh", "/auth/logout").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/auth/public-key", "/auth/public-keys").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/auth/public-key", "/auth/public-keys",
+                                "/auth/consent/current-version").permitAll()
 
                         // 2. Swagger (Recolocado aqui por segurança extra)
                         .requestMatchers(

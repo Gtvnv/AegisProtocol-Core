@@ -8,6 +8,8 @@ public enum AuditEventType {
     LOGOUT_SUCCESS,
     ACCOUNT_CREATED,
     ACCOUNT_DELETED,
+    CONSENT_GIVEN,
+    CONSENT_WITHDRAWN,
 
     // Tokens
     TOKEN_ISSUED,
