@@ -46,6 +46,12 @@ public class PrivacyGateService {
     private static final String PSEUDONYM_PREFIX = "anon_";
     private static final int SECRET_KEY_BYTES = 32; // 256 bits
 
+    // Reaproveitada entre chamadas: SecureRandom já se autosemeia e é
+    // thread-safe (nextBytes é sincronizado internamente na JVM) — instanciar
+    // um novo objeto a cada chave desperdiça o custo de inicialização/coleta
+    // de entropia sem ganhar nada em segurança.
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
     private final PrivacySubjectKeyRepository repository;
 
     @Transactional
@@ -85,7 +91,7 @@ public class PrivacyGateService {
 
     private PrivacySubjectKey newKeyFor(String subjectId) {
         byte[] secret = new byte[SECRET_KEY_BYTES];
-        new SecureRandom().nextBytes(secret);
+        SECURE_RANDOM.nextBytes(secret);
         return PrivacySubjectKey.builder()
                 .subjectId(subjectId)
                 .secretKeyBase64(Base64.getEncoder().encodeToString(secret))
