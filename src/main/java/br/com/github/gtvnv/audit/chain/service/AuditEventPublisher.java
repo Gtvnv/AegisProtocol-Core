@@ -57,6 +57,15 @@ public class AuditEventPublisher {
                 Map.of("eventCategory", "THREAT", "riskScore", riskScore));
     }
 
+    public void publishKeyEvent(AuditEventType type,
+                                String actor,
+                                String kid,
+                                String ipAddress) {
+        publish(type, actor, null, ipAddress, null, null,
+                type.name() + " kid=" + kid,
+                Map.of("eventCategory", "KMS", "kid", nullSafe(kid)));
+    }
+
     public void publishShieldEvent(AuditEventType type,
                                    String actor,
                                    String jti,

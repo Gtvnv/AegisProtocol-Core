@@ -19,6 +19,7 @@ import java.security.interfaces.RSAPublicKey;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -82,8 +83,30 @@ public class AuthController {
         return ResponseEntity.ok(Map.of(
                 "algorithm", "RSA",
                 "format", "X.509",
+                "kid", keyManagerService.getCurrentKid(),
                 "key", publicKeyBase64
         ));
+    }
+
+    /**
+     * Todas as chaves públicas ainda válidas para verificação (atual + anteriores
+     * dentro da retenção) — microsserviços satélites devem validar tokens escolhendo
+     * a chave pelo 'kid' do header do JWT, não assumir sempre a mais recente.
+     * Necessário durante uma rotação: tokens antigos continuam válidos até expirar.
+     */
+    @GetMapping("/public-keys")
+    public ResponseEntity<Map<String, Object>> getPublicKeys() {
+        List<Map<String, String>> keys = keyManagerService.getVerificationKeys().entrySet().stream()
+                .map(entry -> Map.of(
+                        "kid", entry.getKey(),
+                        "algorithm", "RSA",
+                        "format", "X.509",
+                        "current", entry.getKey().equals(keyManagerService.getCurrentKid()) ? "true" : "false",
+                        "key", Base64.getEncoder().encodeToString(entry.getValue().getEncoded())
+                ))
+                .toList();
+
+        return ResponseEntity.ok(Map.of("keys", keys));
     }
 
     // Correção: Adicionada anotação e tipagem forte no retorno

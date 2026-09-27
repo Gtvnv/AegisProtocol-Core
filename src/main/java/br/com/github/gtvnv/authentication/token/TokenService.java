@@ -4,10 +4,14 @@ import br.com.github.gtvnv.config.JwtProperties;
 import br.com.github.gtvnv.crypto.KeyManagerService;
 import br.com.github.gtvnv.domain.model.Subject; // Importe o Subject
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Header;
+import io.jsonwebtoken.JwsHeader;
 import io.jsonwebtoken.Jwts;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
+
+import java.security.Key;
 
 import java.time.Instant;
 import java.util.Date;
@@ -49,6 +53,9 @@ public class TokenService {
         Instant validity = now.plusSeconds(expirationSeconds);
 
         return Jwts.builder()
+                // 🔥 kid identifica QUAL chave assinou — permite rotacionar sem invalidar
+                // tokens já emitidos (ver KeyManagerService.rotate()).
+                .header().keyId(keyManagerService.getCurrentKid()).and()
                 .id(UUID.randomUUID().toString())
                 .subject(subject)
                 .claims(extraClaims)
@@ -57,15 +64,21 @@ public class TokenService {
                 .signWith(keyManagerService.getPrivateKey(), Jwts.SIG.RS256)
                 .compact();
     }
-    
+
 
     public Claims validateAndGetClaims(String token) {
         return Jwts.parser()
-                // 🔥 Usa o KeyManagerService
-                .verifyWith(keyManagerService.getPublicKey())
+                // 🔥 Resolve a chave pela 'kid' do header — aceita tokens assinados pela
+                // chave atual OU por qualquer chave anterior ainda dentro da retenção.
+                .keyLocator(this::resolveVerificationKey)
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
+    }
+
+    private Key resolveVerificationKey(Header header) {
+        Object kid = header.get(JwsHeader.KEY_ID);
+        return keyManagerService.getVerificationKey(kid != null ? kid.toString() : null);
     }
 
     // --- Métodos de Extração e Validação (Mantidos) ---
