@@ -57,6 +57,15 @@ public class AuditEventPublisher {
                 Map.of("eventCategory", "THREAT", "riskScore", riskScore));
     }
 
+    public void publishConsentEvent(AuditEventType type,
+                                    String actor,
+                                    String version,
+                                    String ipAddress) {
+        publish(type, actor, null, ipAddress, null, null,
+                type.name() + " actor=" + actor + " version=" + nullSafe(version),
+                Map.of("eventCategory", "CONSENT", "version", nullSafe(version)));
+    }
+
     public void publishKeyEvent(AuditEventType type,
                                 String actor,
                                 String kid,

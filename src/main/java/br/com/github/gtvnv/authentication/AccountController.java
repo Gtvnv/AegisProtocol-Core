@@ -6,6 +6,7 @@ import br.com.github.gtvnv.audit.chain.repository.AuditChainRepository;
 import br.com.github.gtvnv.audit.chain.service.AuditChainService;
 import br.com.github.gtvnv.authentication.revocation.TokenBlacklistService;
 import br.com.github.gtvnv.authentication.token.TokenService;
+import br.com.github.gtvnv.consent.service.ConsentService;
 import br.com.github.gtvnv.domain.entity.UserEntity;
 import br.com.github.gtvnv.domain.repository.UserRepository;
 import br.com.github.gtvnv.privacy.service.PrivacyGateService;
@@ -44,6 +45,7 @@ public class AccountController {
     private final AuditChainRepository auditChainRepository;
     private final TokenBlacklistService blacklistService;
     private final TokenService tokenService;
+    private final ConsentService consentService;
 
     @GetMapping("/export")
     public ResponseEntity<Map<String, Object>> exportAccount() {
@@ -63,6 +65,9 @@ public class AccountController {
         data.put("email", user.getEmail());
         data.put("roles", user.getRoles());
         data.put("emailVerified", user.isEnabled());
+        data.put("consent", consentService.currentConsent(username)
+                .map(c -> Map.of("version", c.getVersion(), "consentedAt", c.getConsentedAt().toString()))
+                .orElse(Map.of()));
         data.put("auditTrailEntryCount", auditTrail.size());
         data.put("auditTrail", auditTrail);
         data.put("exportedAt", Instant.now().toString());
@@ -98,6 +103,7 @@ public class AccountController {
         );
 
         privacyGate.forget(username);
+        consentService.forgetAll(username); // consent_records não é WORM — apaga de verdade
         userRepository.delete(user);
         blacklistCurrentToken(request);
 

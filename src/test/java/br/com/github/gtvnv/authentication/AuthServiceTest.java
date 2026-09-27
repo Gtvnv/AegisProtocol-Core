@@ -7,6 +7,7 @@ import br.com.github.gtvnv.authentication.dto.RegisterRequest;
 import br.com.github.gtvnv.authentication.dto.TokenResponse;
 import br.com.github.gtvnv.authentication.revocation.TokenBlacklistService;
 import br.com.github.gtvnv.authentication.token.TokenService;
+import br.com.github.gtvnv.consent.service.ConsentService;
 import br.com.github.gtvnv.config.JwtProperties;
 import br.com.github.gtvnv.domain.entity.UserEntity;
 import br.com.github.gtvnv.domain.model.Subject;
@@ -53,6 +54,7 @@ class AuthServiceTest {
     @Mock private AuthenticationManager authenticationManager;
     @Mock private TokenBlacklistService tokenBlacklistService;
     @Mock private AuditEventPublisher   chainPublisher;
+    @Mock private ConsentService        consentService;
 
     @InjectMocks
     private AuthService authService;
@@ -165,7 +167,7 @@ class AuthServiceTest {
         when(userRepository.existsByUsername("alice")).thenReturn(true);
 
         assertThatThrownBy(() -> authService.register(
-            new RegisterRequest("alice", "pass123!", "alice@test.com", Set.of("USER"))))
+            new RegisterRequest("alice", "pass123!", "alice@test.com", Set.of("USER"), "1.0")))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("Username already exists");
 
@@ -190,7 +192,7 @@ class AuthServiceTest {
         when(tokenService.extractJti(any())).thenReturn("jti1");
         when(jwtProperties.getAccessTokenExpiration()).thenReturn(300L);
 
-        authService.register(new RegisterRequest("bob", "pass123!", "bob@test.com", Set.of("USER")));
+        authService.register(new RegisterRequest("bob", "pass123!", "bob@test.com", Set.of("USER"), "1.0"));
 
         verify(chainPublisher).publishAuthEvent(
             eq(AuditEventType.ACCOUNT_CREATED), eq("bob"), any(), isNull(), any());
@@ -215,9 +217,46 @@ class AuthServiceTest {
         when(tokenService.extractJti(any())).thenReturn("jti1");
         when(jwtProperties.getAccessTokenExpiration()).thenReturn(300L);
 
-        authService.register(new RegisterRequest("carlos", "pass!", "c@test.com", null));
+        authService.register(new RegisterRequest("carlos", "pass!", "c@test.com", null, "1.0"));
 
         assertThat(captor.getValue().getRoles()).containsExactly("USER");
+    }
+
+    @Test
+    @DisplayName("Register com consentVersion inválida falha ANTES de tocar no UserRepository")
+    void register_InvalidConsentVersion_FailsBeforeTouchingRepository() {
+        doThrow(new IllegalArgumentException("Versão de consentimento desatualizada"))
+            .when(consentService).validateVersion("0.1");
+
+        assertThatThrownBy(() -> authService.register(
+            new RegisterRequest("dave", "pass123!", "dave@test.com", Set.of("USER"), "0.1")))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("consentimento");
+
+        verifyNoInteractions(userRepository);
+        verify(chainPublisher, never()).publishAuthEvent(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("Register grava o consentimento do titular com a versão enviada")
+    void register_NewUser_RecordsConsent() {
+        when(userRepository.existsByUsername("erin")).thenReturn(false);
+        when(passwordEncoder.encode(any())).thenReturn("hashed_pass");
+        when(userRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        Authentication authMock = mockAuthentication("erin", List.of("USER"));
+        UserEntity entity = userEntity("erin", false, Set.of("USER"));
+        when(authenticationManager.authenticate(any())).thenReturn(authMock);
+        when(userRepository.findByUsername("erin")).thenReturn(Optional.of(entity));
+        when(tokenService.generateAccessToken(any())).thenReturn("at");
+        when(tokenService.generateRefreshToken(any())).thenReturn("rt");
+        when(tokenService.extractJti(any())).thenReturn("jti1");
+        when(jwtProperties.getAccessTokenExpiration()).thenReturn(300L);
+
+        authService.register(new RegisterRequest("erin", "pass123!", "erin@test.com", Set.of("USER"), "1.0"));
+
+        verify(consentService).validateVersion("1.0");
+        verify(consentService).recordConsent(eq("erin"), eq("1.0"), any());
     }
 
     // -----------------------------------------------------------------------
