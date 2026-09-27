@@ -77,3 +77,14 @@ aegis:
     archive-dir: "audit-archive"
     batch-size: 500
     cron: "0 0 2 * * *"          # 02:00 todo dia
+
+  # Incident Response Orchestrator — ShieldThreatEvent >= minSeverity vira
+  # incidente formal com SLA. Ajuste os prazos pra sua política interna.
+  incident:
+    enabled: true
+    min-severity: HIGH
+    acknowledge-sla-hours-critical: 4
+    notify-sla-hours-critical: 24
+    acknowledge-sla-hours-high: 24
+    notify-sla-hours-high: 72
+    sla-check-cron: "0 */15 * * * *"   # a cada 15 min
