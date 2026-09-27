@@ -1,6 +1,8 @@
 package br.com.github.gtvnv.config;
 
 import br.com.github.gtvnv.authentication.filter.JwtAuthenticationFilter;
+import br.com.github.gtvnv.network.config.NetworkProperties;
+import br.com.github.gtvnv.network.filter.NetworkSentinelFilter;
 import br.com.github.gtvnv.shield.filter.ShieldFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -22,7 +24,6 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
-import java.util.List;
 
 @Configuration
 @EnableWebSecurity
@@ -30,11 +31,17 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final ShieldFilter shieldFilter;
+    private final NetworkSentinelFilter networkSentinelFilter;
+    private final NetworkProperties networkProperties;
 
     public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
-                          ShieldFilter shieldFilter) {
+                          ShieldFilter shieldFilter,
+                          NetworkSentinelFilter networkSentinelFilter,
+                          NetworkProperties networkProperties) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.shieldFilter = shieldFilter;
+        this.networkSentinelFilter = networkSentinelFilter;
+        this.networkProperties = networkProperties;
     }
 
     @Bean
@@ -61,7 +68,9 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:4200", "http://localhost:3000"));
+        // Satélite Network Sentinel: configurável por ambiente (aegis.network.cors-allowed-origins),
+        // não mais hardcoded em localhost — pré-requisito pra operar como IdP entre sistemas internos reais.
+        configuration.setAllowedOrigins(networkProperties.getCorsAllowedOrigins());
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"));
         configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type"));
         configuration.setAllowCredentials(true);
@@ -123,6 +132,9 @@ public class SecurityConfig {
                 )
 
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                // Network Sentinel roda antes do JWT: rejeita origem de rede não confiável
+                // em /api/admin/** antes até de gastar ciclo com autenticação/ABAC (defesa em profundidade).
+                .addFilterBefore(networkSentinelFilter, JwtAuthenticationFilter.class)
                 .addFilterAfter(shieldFilter, JwtAuthenticationFilter.class)
                 .build();
     }

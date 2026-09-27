@@ -84,6 +84,16 @@ public class AuditEventPublisher {
                 Map.of("eventCategory", "INCIDENT", "incidentId", nullSafe(incidentId)));
     }
 
+    public void publishNetworkEvent(AuditEventType type,
+                                    String actor,
+                                    String ipAddress,
+                                    String resourcePath,
+                                    String detail) {
+        publish(type, actor, null, ipAddress, null, resourcePath,
+                detail,
+                Map.of("eventCategory", "NETWORK"));
+    }
+
     public void publishKeyEvent(AuditEventType type,
                                 String actor,
                                 String kid,
