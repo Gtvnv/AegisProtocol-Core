@@ -55,9 +55,38 @@ class CidrMatcherTest {
         assertThat(matcher.matches("10.0.0.1", "10.0.0.0/-1")).isFalse();
     }
 
+    @ParameterizedTest(name = "{0} em {1} => {2}")
+    @CsvSource({
+        "2001:db8::1,      2001:db8::/32,  true",
+        "2001:db9::1,      2001:db8::/32,  false",
+        "fe80::1,          fe80::/10,      true",
+        "fec0::1,          fe80::/10,      false",
+        "::1,              ::1/128,        true",
+        "::2,              ::1/128,        false",
+    })
+    @DisplayName("Faixas CIDR IPv6")
+    void matches_Ipv6Ranges(String ip, String cidr, boolean expected) {
+        assertThat(matcher.matches(ip, cidr)).isEqualTo(expected);
+    }
+
     @Test
-    @DisplayName("IPv6 não é suportado — retorna false em vez de casar por engano")
-    void matches_Ipv6_ReturnsFalse() {
-        assertThat(matcher.matches("::1", "::1/128")).isFalse();
+    @DisplayName("IPv6 sem prefixo (/128 implícito) só casa com o endereço exato")
+    void matches_Ipv6NoSlash_TreatedAsSlash128() {
+        assertThat(matcher.matches("2001:db8::1", "2001:db8::1")).isTrue();
+        assertThat(matcher.matches("2001:db8::2", "2001:db8::1")).isFalse();
+    }
+
+    @Test
+    @DisplayName("IPv6 com prefixo fora de 0-128 retorna false, não lança")
+    void matches_Ipv6InvalidPrefix_ReturnsFalseWithoutThrowing() {
+        assertThat(matcher.matches("::1", "::1/129")).isFalse();
+        assertThat(matcher.matches("::1", "::1/-1")).isFalse();
+    }
+
+    @Test
+    @DisplayName("IPv4 nunca casa contra faixa IPv6 e vice-versa, mesmo com prefixo 0")
+    void matches_MixedVersions_NeverMatch() {
+        assertThat(matcher.matches("10.0.0.1", "::/0")).isFalse();
+        assertThat(matcher.matches("::1", "0.0.0.0/0")).isFalse();
     }
 }
