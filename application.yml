@@ -23,6 +23,19 @@ spring:
     password: ${POSTGRES_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
+  # Satélite Incident Notification real — dev: MailHog (docker-compose,
+  # serviço aegis-mailhog) captura tudo sem mandar e-mail de verdade.
+  # Em produção, aponte pro seu SMTP real (ou ${AEGIS_SMTP_HOST}/etc).
+  mail:
+    host: "${AEGIS_SMTP_HOST:127.0.0.1}"
+    port: "${AEGIS_SMTP_PORT:1025}"
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: false
+
   jpa:
     # "update" cria/atualiza tabelas automaticamente (Dev).
     # Em Produção, use "validate" ou "none" (com Flyway/Liquibase).
@@ -74,6 +87,15 @@ aegis:
     base-path: "aegis/jwt"
     connect-timeout-ms: 3000
     read-timeout-ms: 3000
+
+  # Incident Notification real — quem recebe o aviso "para a ANPD". Sem
+  # isso configurado, a notificação à autoridade fica indisponível (a API
+  # da ANPD não tem endpoint público de notificação em tempo real — o
+  # fluxo real é avisar o time/DPO, que registra formalmente).
+  notification:
+    enabled: true
+    from-address: "no-reply@aegisprotocol.example"
+    compliance-team-email: "${AEGIS_COMPLIANCE_EMAIL:}"
 
   # Consent Ledger — versão vigente dos termos/política de privacidade.
   # Bump aqui quando o texto legal mudar: clientes com consentVersion antigo
