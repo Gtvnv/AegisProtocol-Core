@@ -1,0 +1,30 @@
+{
+  "jdk": {
+    "required": "JDK 21 (o pom usa spring-boot-starter-parent 3.4.2 — NÃO compila/testa corretamente com JDK 25 do sistema).",
+    "bundledPath": "/c/Users/Gustavo/.vscode/extensions/redhat.java-1.56.0-win32-x64/jre/21.0.12.1-win32-x86_64",
+    "howToUse": "export JAVA_HOME=<bundledPath> && export PATH=\"$JAVA_HOME/bin:$PATH\" antes de qualquer mvn compile/test.",
+    "note": "O caminho exato depende da versão instalada da extensão redhat.java no VS Code deste usuário — se o compile falhar com esse path, procurar a pasta jre atual sob .vscode/extensions/redhat.java-*/jre/."
+  },
+  "staleRecompileGotcha": "Algum processo de fundo (provavelmente a extensão Java do VS Code ou a extensão de App Modernization) às vezes recompila em background usando JAVA_HOME=JDK25 e contamina target/classes com bytecode incompatível (erro 'class file version 69.0' no surefire). MITIGAÇÃO PADRÃO: sempre rodar 'rm -rf target/classes target/test-classes' IMEDIATAMENTE ANTES de qualquer 'mvn compile'/'mvn test', nunca confiar no staleness check incremental do Maven.",
+  "offlineFlagGotcha": "O flag -o (modo totalmente offline) às vezes quebra o classloading do maven-surefire-plugin/maven-clean-plugin (NoClassDefFoundError). Não assumir que o build está quebrado — só tirar o -o e deixar resolver online (rede disponível).",
+  "ideDiagnosticsUnreliable": {
+    "summary": "O hook PostToolUse:Edit mostra diagnostics do language server (NetBeans-based) do IDE depois de CADA edit — e ele é estruturalmente quebrado neste ambiente, não confiável sozinho.",
+    "why": "O language server do IDE roda sob o JDK do sistema (25), e a versão do Lombok pinada via spring-boot-starter-parent 3.4.2 não suporta annotation processing no JDK 25.",
+    "knownNoisePatterns": [
+      "NoClassDefFoundError: Could not initialize class lombok.javac.Javac (stack trace gigante)",
+      "'variable X not initialized in the default constructor' em classes com @RequiredArgsConstructor",
+      "'cannot find symbol: method getXxx()/builder()/log' em classes com @Data/@Builder/@Slf4j"
+    ],
+    "rule": "Esses padrões específicos são ruído conhecido — ignorar. MAS não ignorar tudo cegamente: erros de import, erros de sintaxe fora de código lombok, ou erros de multi-catch/tipo podem ser reais mesmo misturados nesse ruído. Regra prática: se o diagnostic 'parece' um membro gerado por lombok faltando, é ruído; se é um import, uma sintaxe fora de lombok, ou um erro de tipo, verificar via mvn imediatamente. A fonte de verdade É SEMPRE mvn compile/test com JDK21, nunca o IDE sozinho."
+  },
+  "knownPreExistingTestFailures": {
+    "total": 18,
+    "confirmedOn": "main limpo, antes de qualquer trabalho de satélite — não há CI configurado neste repo",
+    "breakdown": [
+      { "class": "br.com.github.gtvnv.audit.chain.integration.AuditChainIntegrationTest", "count": 15, "cause": "Falhas de contexto do slice @DataJpaTest" },
+      { "class": "br.com.github.gtvnv.authentication.filter.JwtAuthenticationFilterTest", "count": 3, "cause": "UnnecessaryStubbingException" }
+    ],
+    "rule": "Confirmado como PRESENTE e IDÊNTICO (mesma contagem, mesmas classes) depois de CADA satélite entregue ao longo de toda a sessão — nunca cresceu, nunca mudou de identidade. Sempre citar explicitamente em cada PR como 'já existia em main, fora do escopo deste satélite'. Se a contagem mudar (mais ou diferente), investigar — pode ser uma regressão real."
+  },
+  "testRunProtocol": "1) rm -rf target/classes target/test-classes  2) export JAVA_HOME/PATH pro JDK21 bundled  3) mvn -q -DskipTests compile (deve rodar limpo, zero output)  4) mvn -q test  5) conferir 'Tests run: N, Failures: 0, Errors: 18' — Failures DEVE ser 0 sempre; Errors DEVE ser exatamente 18 (os pré-existentes). Qualquer Failures > 0 ou Errors != 18 é uma regressão real do trabalho atual."
+}

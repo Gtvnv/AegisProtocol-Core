@@ -1,0 +1,30 @@
+[
+  {
+    "id": "java25-migration-untouched",
+    "severity": "high",
+    "title": "Migração Java 25 / Spring Boot 3.5 encontrada no disco — NUNCA tocar sem pedido explícito",
+    "detail": "No meio de uma sessão anterior, uma migração para Java 25 / Spring Boot 3.5 apareceu no working tree (pom.xml, Dockerfile, README.md modificados) sem ter sido feita por Claude. Foi surfaced explicitamente ao usuário em vez de sobrescrita silenciosa. O usuário escolheu 'Deixa de lado por agora' — as mudanças foram guardadas via 'git stash push -m \"unrelated: java25/springboot3.5 upgrade found on disk, not mine, set aside\" -- pom.xml Dockerfile README.md'. Depois descobriu-se uma SEGUNDA manifestação da mesma causa: uma branch local-only 'appmod/java-upgrade-20260927211009' (nunca dada push, criada pela extensão VS Code 'GitHub Copilot App Modernization for Java'), também intocada.",
+    "rule": "Tanto o stash quanto a branch appmod/* NUNCA devem ser tocados, mergeados ou usados como base de build sem o usuário pedir explicitamente de novo. Ao trabalhar em qualquer satélite, verificar periodicamente ('git stash list' e 'git branch -a') que ambos seguem intocados."
+  },
+  {
+    "id": "bash-classifier-outage",
+    "severity": "medium",
+    "title": "Outage transiente do classificador de segurança do Bash/PowerShell",
+    "detail": "Às vezes chamadas de Bash/PowerShell (mesmo 'echo test') retornam: 'The server-side auto mode classifier gave no verdict (error)...'. É um outage transiente do lado do servidor, não um problema real de segurança do comando.",
+    "rule": "Não fazer retry cego em loop — a própria mensagem de erro avisa que tentativas repetidas ficam mais lentas e a conversa trava depois de 10 sem veredito. Tentar no máximo 1-2 vezes, depois trocar pra trabalho read-only (Read/Grep/Glob, que não passam pelo classificador) e voltar a tentar Bash/PowerShell periodicamente até normalizar."
+  },
+  {
+    "id": "claude-docs-connector-flaky",
+    "severity": "low",
+    "title": "Conector MCP do Claude Docs pode cair no meio da sessão",
+    "detail": "O doc de compliance (ver overview.complianceDoc) é um artifact do tipo 'pages' — conteúdo só é lido/escrito pelas tools do conector Claude Docs (read/batch/update), NUNCA pela tool Artifact genérica (publish/read nela não muda o conteúdo do doc, só metadados/tipo). Esse conector já ficou indisponível no meio de sessões anteriores (tools somem da lista de deferred tools).",
+    "rule": "Quando isso acontece, a atualização do doc fica genuinamente bloqueada — não simular, não fingir que atualizou, avisar o usuário claramente e tentar de novo mais tarde (ToolSearch por 'claude docs' periodicamente)."
+  },
+  {
+    "id": "branch-per-feature-mandatory",
+    "severity": "high",
+    "title": "Nunca commitar direto em main/master",
+    "detail": "Instrução permanente do usuário: toda evolução (satélite novo, fix, o que for) ganha sua própria branch e PR.",
+    "rule": "Antes de QUALQUER commit, confirmar 'git status' mostra uma branch feat-* (ou equivalente), nunca main. Se uma sessão anterior deixou trabalho não commitado em cima de uma branch já mergeada (pode acontecer se a sessão foi interrompida no meio do fluxo), mover as mudanças pra uma branch nova ANTES de commitar — nunca commitar em cima de uma branch obsoleta só porque é onde o working tree já está."
+  }
+]
