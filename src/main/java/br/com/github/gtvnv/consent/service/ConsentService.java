@@ -93,4 +93,9 @@ public class ConsentService {
                 .filter(record -> properties.getCurrentVersion().equals(record.getVersion()))
                 .isPresent();
     }
+
+    /** Usado pelo satélite Consent Gate (AuthService) para compor a mensagem de erro. */
+    public String currentRequiredVersion() {
+        return properties.getCurrentVersion();
+    }
 }

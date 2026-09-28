@@ -2,6 +2,7 @@ package br.com.github.gtvnv.authentication;
 
 import br.com.github.gtvnv.audit.chain.domain.AuditEventType;
 import br.com.github.gtvnv.audit.chain.service.AuditEventPublisher;
+import br.com.github.gtvnv.consent.exception.ConsentRequiredException;
 import br.com.github.gtvnv.consent.service.ConsentService;
 import br.com.github.gtvnv.authentication.dto.LoginRequest;
 import br.com.github.gtvnv.authentication.dto.RegisterRequest;
@@ -69,6 +70,11 @@ public class AuthService {
                 .orElseThrow(() -> new RuntimeException("Inconsistência: Usuário autenticado não encontrado no banco via AuthService."));
         // Agora sim temos o valor correto do banco (que será FALSE para novos usuários)
         boolean isEmailVerified = userEntity.isEnabled();
+
+        // 2.5. Satélite Consent Gate: sem consentimento válido na versão vigente,
+        // não sai token — a menos que este próprio login já traga o reconsentimento.
+        enforceConsent(userEntity.getUsername(), request.consentVersion());
+
         List<String> roles = userDetails.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .map(role -> role.replace("ROLE_", ""))
@@ -158,6 +164,16 @@ public class AuthService {
             throw new SecurityException("Conta desativada");
         }
 
+        // Satélite Consent Gate: refresh não carrega consentVersion — sem
+        // reconsentimento inline aqui, força login novo em vez de renovar.
+        if (!consentService.hasValidCurrentConsent(user.getUsername())) {
+            chainPublisher.publishAuthEvent(AuditEventType.CONSENT_REQUIRED_BLOCKED,
+                    user.getUsername(), resolveClientIp(), null, "Refresh blocked: consent not current");
+            throw new ConsentRequiredException(
+                    "Consentimento na versão vigente é obrigatório. Faça login novamente enviando consentVersion.",
+                    consentService.currentRequiredVersion());
+        }
+
         // Recria as roles (caso tenham mudado no banco desde o último login)
         List<String> roles = user.getRoles().stream().toList();
 
@@ -191,6 +207,28 @@ public class AuthService {
                 "Bearer",
                 jwtProperties.getAccessTokenExpiration()
         );
+    }
+
+    /**
+     * Satélite Consent Gate: sem consentimento válido na versão vigente, só
+     * deixa passar se este próprio login já trouxer o reconsentimento
+     * (consentVersion correto) — nesse caso grava o consentimento e segue.
+     * Caso contrário, barra antes de emitir qualquer token.
+     */
+    private void enforceConsent(String username, String submittedVersion) {
+        if (consentService.hasValidCurrentConsent(username)) {
+            return;
+        }
+        if (submittedVersion != null && !submittedVersion.isBlank()) {
+            consentService.validateVersion(submittedVersion);
+            consentService.recordConsent(username, submittedVersion, resolveClientIp());
+            return;
+        }
+        chainPublisher.publishAuthEvent(AuditEventType.CONSENT_REQUIRED_BLOCKED,
+                username, resolveClientIp(), null, "Login blocked: consent not current");
+        throw new ConsentRequiredException(
+                "Consentimento na versão vigente é obrigatório para continuar. Reenvie o login com consentVersion.",
+                consentService.currentRequiredVersion());
     }
 
     private String resolveClientIp() {
