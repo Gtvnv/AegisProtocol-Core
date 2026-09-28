@@ -42,6 +42,17 @@ services:
     networks:
       - aegis-net
 
+  # 4. SMTP de mentira pro satélite de Incident Notification real — captura
+  # tudo, não manda nada de verdade. UI em http://localhost:8025.
+  aegis-mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: aegis-mailhog
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - aegis-net
+
 networks:
   aegis-net:
     driver: bridge

@@ -2,10 +2,14 @@ package br.com.github.gtvnv.incident.service;
 
 import br.com.github.gtvnv.audit.chain.domain.AuditEventType;
 import br.com.github.gtvnv.audit.chain.service.AuditEventPublisher;
+import br.com.github.gtvnv.domain.entity.UserEntity;
+import br.com.github.gtvnv.domain.repository.UserRepository;
 import br.com.github.gtvnv.incident.config.IncidentProperties;
 import br.com.github.gtvnv.incident.domain.IncidentStatus;
 import br.com.github.gtvnv.incident.domain.SecurityIncident;
 import br.com.github.gtvnv.incident.repository.SecurityIncidentRepository;
+import br.com.github.gtvnv.notification.config.NotificationProperties;
+import br.com.github.gtvnv.notification.service.NotificationProvider;
 import br.com.github.gtvnv.shield.domain.ThreatLevel;
 import br.com.github.gtvnv.shield.event.ShieldThreatEvent;
 import lombok.RequiredArgsConstructor;
@@ -17,10 +21,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -28,11 +34,13 @@ import java.util.UUID;
  * grave num incidente formal, com SLA e ciclo de vida rastreável. Fecha
  * ISO A.5.26 e viabiliza LGPD Art. 48.
  *
- * A notificação em si (notify()) é simulada — não há integração real de
- * e-mail/SMS/API da ANPD neste satélite. O que ele entrega é a parte que
- * fica: o registro de QUE a notificação aconteceu, QUANDO, e a cobrança de
- * SLA automática se ninguém agir a tempo. Plugar um provedor real de
- * notificação é a próxima peça, não este satélite.
+ * notify() manda e-mail de verdade (via NotificationProvider — ver satélite
+ * de notificação real): titular (e-mail resolvido via UserRepository a
+ * partir de incident.actor) e o time de compliance interno, que é quem de
+ * fato faz o registro formal na ANPD (a autoridade não expõe uma API
+ * pública de notificação em tempo real). O status só avança pra NOTIFIED
+ * quando AMBOS os envios têm sucesso — envio parcial fica registrado com
+ * os timestamps que realmente aconteceram, sem fingir que deu tudo certo.
  */
 @Slf4j
 @Service
@@ -42,6 +50,9 @@ public class IncidentOrchestratorService {
     private final SecurityIncidentRepository repository;
     private final IncidentProperties properties;
     private final AuditEventPublisher chainPublisher;
+    private final UserRepository userRepository;
+    private final NotificationProvider notificationProvider;
+    private final NotificationProperties notificationProperties;
 
     @Async
     @EventListener
@@ -114,23 +125,75 @@ public class IncidentOrchestratorService {
         return incident;
     }
 
-    /** Simulado — ver javadoc da classe. Marca titular + ANPD como notificados. */
+    /**
+     * Manda e-mail de verdade pro titular e pro time de compliance. Envio
+     * parcial fica registrado com exatidão — status só vira NOTIFIED quando
+     * os dois têm sucesso; falha em qualquer um mantém o incidente elegível
+     * pra cobrança de SLA (checkOverdueSlas continua vendo como pendente).
+     */
     @Transactional
     public SecurityIncident notify(UUID incidentId, String byActor) {
         SecurityIncident incident = findOrThrow(incidentId);
         if (incident.getStatus() == IncidentStatus.RESOLVED) {
             throw new IllegalStateException("Incidente %s já está RESOLVED".formatted(incidentId));
         }
-        Instant now = Instant.now();
-        incident.setStatus(IncidentStatus.NOTIFIED);
-        incident.setSubjectNotifiedAt(now);
-        incident.setAuthorityNotifiedAt(now);
+
+        boolean subjectOk = notifySubject(incident);
+        boolean authorityOk = notifyAuthority(incident);
+
+        if (subjectOk && authorityOk) {
+            incident.setStatus(IncidentStatus.NOTIFIED);
+        }
         repository.save(incident);
 
         chainPublisher.publishIncidentEvent(AuditEventType.INCIDENT_NOTIFIED,
-                byActor, incidentId.toString(), "Subject and authority (ANPD) notified");
-        log.warn("INCIDENT NOTIFIED id={} — titular e ANPD marcados como avisados (simulado).", incidentId);
+                byActor, incidentId.toString(),
+                "Notify attempted: subject=%s authority=%s".formatted(subjectOk, authorityOk));
+        log.warn("INCIDENT NOTIFY id={} subject={} authority={}", incidentId, subjectOk, authorityOk);
         return incident;
+    }
+
+    private boolean notifySubject(SecurityIncident incident) {
+        if (!notificationProperties.isEnabled()) {
+            return false;
+        }
+        Optional<UserEntity> user = userRepository.findByUsername(incident.getActor());
+        if (user.isEmpty()) {
+            log.warn("IncidentOrchestrator: titular '{}' não encontrado (conta já excluída?) — não dá pra notificar por e-mail.",
+                    incident.getActor());
+            return false;
+        }
+        try {
+            notificationProvider.send(user.get().getEmail(),
+                    "Alerta de segurança na sua conta",
+                    "Detectamos uma atividade de segurança na sua conta em %s (severidade %s). "
+                            .formatted(incident.getOpenedAt(), incident.getSeverity())
+                            + "Se não foi você, contate o suporte imediatamente.");
+            incident.setSubjectNotifiedAt(Instant.now());
+            return true;
+        } catch (IOException e) {
+            log.error("IncidentOrchestrator: falha ao notificar titular do incidente {}: {}", incident.getId(), e.getMessage());
+            return false;
+        }
+    }
+
+    private boolean notifyAuthority(SecurityIncident incident) {
+        if (!notificationProperties.isEnabled() || notificationProperties.getComplianceTeamEmail() == null
+                || notificationProperties.getComplianceTeamEmail().isBlank()) {
+            log.warn("IncidentOrchestrator: aegis.notification.compliance-team-email não configurado — notificação à autoridade indisponível.");
+            return false;
+        }
+        try {
+            notificationProvider.send(notificationProperties.getComplianceTeamEmail(),
+                    "Incidente de segurança requer avaliação (LGPD Art. 48)",
+                    "Incidente %s aberto em %s, severidade %s, ator=%s. Avalie se há dever de comunicação à ANPD."
+                            .formatted(incident.getId(), incident.getOpenedAt(), incident.getSeverity(), incident.getActor()));
+            incident.setAuthorityNotifiedAt(Instant.now());
+            return true;
+        } catch (IOException e) {
+            log.error("IncidentOrchestrator: falha ao notificar time de compliance do incidente {}: {}", incident.getId(), e.getMessage());
+            return false;
+        }
     }
 
     @Transactional

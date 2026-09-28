@@ -2,10 +2,14 @@ package br.com.github.gtvnv.incident.service;
 
 import br.com.github.gtvnv.audit.chain.domain.AuditEventType;
 import br.com.github.gtvnv.audit.chain.service.AuditEventPublisher;
+import br.com.github.gtvnv.domain.entity.UserEntity;
+import br.com.github.gtvnv.domain.repository.UserRepository;
 import br.com.github.gtvnv.incident.config.IncidentProperties;
 import br.com.github.gtvnv.incident.domain.IncidentStatus;
 import br.com.github.gtvnv.incident.domain.SecurityIncident;
 import br.com.github.gtvnv.incident.repository.SecurityIncidentRepository;
+import br.com.github.gtvnv.notification.config.NotificationProperties;
+import br.com.github.gtvnv.notification.service.NotificationProvider;
 import br.com.github.gtvnv.shield.domain.ThreatLevel;
 import br.com.github.gtvnv.shield.event.ShieldThreatEvent;
 import br.com.github.gtvnv.shield.service.ShieldRiskScorer.ScoreResult;
@@ -17,6 +21,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -30,15 +35,23 @@ class IncidentOrchestratorServiceTest {
 
     @Mock private SecurityIncidentRepository repository;
     @Mock private AuditEventPublisher chainPublisher;
+    @Mock private UserRepository userRepository;
+    @Mock private NotificationProvider notificationProvider;
 
     private IncidentProperties properties;
+    private NotificationProperties notificationProperties;
     private IncidentOrchestratorService service;
 
     @BeforeEach
     void setUp() {
         properties = new IncidentProperties();
         properties.setMinSeverity(ThreatLevel.HIGH);
-        service = new IncidentOrchestratorService(repository, properties, chainPublisher);
+
+        notificationProperties = new NotificationProperties();
+        notificationProperties.setComplianceTeamEmail("compliance@aegisprotocol.example");
+
+        service = new IncidentOrchestratorService(repository, properties, chainPublisher,
+                userRepository, notificationProvider, notificationProperties);
 
         lenient().when(repository.save(any())).thenAnswer(inv -> {
             SecurityIncident i = inv.getArgument(0);
@@ -47,6 +60,10 @@ class IncidentOrchestratorServiceTest {
             }
             return i;
         });
+    }
+
+    private UserEntity userWithEmail(String username, String email) {
+        return UserEntity.builder().username(username).email(email).build();
     }
 
     private ShieldThreatEvent threatEvent(String actor, ThreatLevel level, int score, boolean blocked) {
@@ -175,29 +192,81 @@ class IncidentOrchestratorServiceTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("notify() marca titular E autoridade notificados e publica INCIDENT_NOTIFIED")
-    void notify_MarksSubjectAndAuthorityNotified() {
+    @DisplayName("notify() com titular e autoridade OK marca os dois timestamps e vira NOTIFIED")
+    void notify_BothSucceed_MarksNotifiedWithBothTimestamps() throws Exception {
         UUID id = UUID.randomUUID();
         SecurityIncident acknowledged = SecurityIncident.builder().id(id).actor("bob").status(IncidentStatus.ACKNOWLEDGED).build();
         when(repository.findById(id)).thenReturn(Optional.of(acknowledged));
+        when(userRepository.findByUsername("bob")).thenReturn(Optional.of(userWithEmail("bob", "bob@example.com")));
 
         SecurityIncident result = service.notify(id, "admin1");
 
         assertThat(result.getStatus()).isEqualTo(IncidentStatus.NOTIFIED);
         assertThat(result.getSubjectNotifiedAt()).isNotNull();
         assertThat(result.getAuthorityNotifiedAt()).isNotNull();
+        verify(notificationProvider).send(eq("bob@example.com"), any(), any());
+        verify(notificationProvider).send(eq("compliance@aegisprotocol.example"), any(), any());
         verify(chainPublisher).publishIncidentEvent(
-                eq(AuditEventType.INCIDENT_NOTIFIED), eq("admin1"), eq(id.toString()), any());
+                eq(AuditEventType.INCIDENT_NOTIFIED), eq("admin1"), eq(id.toString()), contains("subject=true"));
     }
 
     @Test
-    @DisplayName("notify() num incidente já RESOLVED lança IllegalStateException")
-    void notify_AlreadyResolved_Throws() {
+    @DisplayName("notify() sem o titular encontrado (conta já excluída) não notifica o titular nem vira NOTIFIED")
+    void notify_SubjectNotFound_SkipsSubjectAndStaysNotNotified() throws Exception {
+        UUID id = UUID.randomUUID();
+        SecurityIncident acknowledged = SecurityIncident.builder().id(id).actor("ghost").status(IncidentStatus.ACKNOWLEDGED).build();
+        when(repository.findById(id)).thenReturn(Optional.of(acknowledged));
+        when(userRepository.findByUsername("ghost")).thenReturn(Optional.empty());
+
+        SecurityIncident result = service.notify(id, "admin1");
+
+        assertThat(result.getStatus()).isEqualTo(IncidentStatus.ACKNOWLEDGED); // não avançou
+        assertThat(result.getSubjectNotifiedAt()).isNull();
+        assertThat(result.getAuthorityNotifiedAt()).isNotNull(); // autoridade ainda funciona independente
+        verify(notificationProvider, times(1)).send(any(), any(), any()); // só a autoridade, nunca o titular
+        verify(notificationProvider).send(eq("compliance@aegisprotocol.example"), any(), any());
+    }
+
+    @Test
+    @DisplayName("notify() com envio ao titular falhando no provider mantém subjectNotifiedAt nulo, sem propagar a exceção")
+    void notify_SubjectSendFails_KeepsSubjectNotifiedAtNull() throws Exception {
+        UUID id = UUID.randomUUID();
+        SecurityIncident acknowledged = SecurityIncident.builder().id(id).actor("bob").status(IncidentStatus.ACKNOWLEDGED).build();
+        when(repository.findById(id)).thenReturn(Optional.of(acknowledged));
+        when(userRepository.findByUsername("bob")).thenReturn(Optional.of(userWithEmail("bob", "bob@example.com")));
+        doThrow(new IOException("SMTP indisponível")).when(notificationProvider).send(eq("bob@example.com"), any(), any());
+
+        SecurityIncident result = service.notify(id, "admin1");
+
+        assertThat(result.getSubjectNotifiedAt()).isNull();
+        assertThat(result.getStatus()).isEqualTo(IncidentStatus.ACKNOWLEDGED); // não avançou pra NOTIFIED
+    }
+
+    @Test
+    @DisplayName("notify() sem complianceTeamEmail configurado não notifica a autoridade nem vira NOTIFIED")
+    void notify_NoComplianceEmailConfigured_SkipsAuthority() throws Exception {
+        notificationProperties.setComplianceTeamEmail(null);
+        UUID id = UUID.randomUUID();
+        SecurityIncident acknowledged = SecurityIncident.builder().id(id).actor("bob").status(IncidentStatus.ACKNOWLEDGED).build();
+        when(repository.findById(id)).thenReturn(Optional.of(acknowledged));
+        when(userRepository.findByUsername("bob")).thenReturn(Optional.of(userWithEmail("bob", "bob@example.com")));
+
+        SecurityIncident result = service.notify(id, "admin1");
+
+        assertThat(result.getAuthorityNotifiedAt()).isNull();
+        assertThat(result.getStatus()).isEqualTo(IncidentStatus.ACKNOWLEDGED);
+        verify(notificationProvider, times(1)).send(any(), any(), any()); // só o titular
+    }
+
+    @Test
+    @DisplayName("notify() num incidente já RESOLVED lança IllegalStateException, sem mandar nada")
+    void notify_AlreadyResolved_ThrowsWithoutSending() {
         UUID id = UUID.randomUUID();
         SecurityIncident resolved = SecurityIncident.builder().id(id).status(IncidentStatus.RESOLVED).build();
         when(repository.findById(id)).thenReturn(Optional.of(resolved));
 
         assertThatThrownBy(() -> service.notify(id, "admin1")).isInstanceOf(IllegalStateException.class);
+        verifyNoInteractions(notificationProvider);
     }
 
     // -----------------------------------------------------------------------

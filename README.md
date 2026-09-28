@@ -12,6 +12,7 @@ O **Aegis Core** é um Middleware de Segurança e Identity Provider (IdP) projet
 - **Redis** (Token Blacklist & Revocation)
 - **PostgreSQL** (User Store)
 - **HashiCorp Vault** (KMS opcional — `aegis.jwt.key-source=vault`; padrão é arquivo local)
+- **SMTP** (notificação de incidente ao titular + time de compliance — LGPD Art. 48)
 - **Docker** (Containerização)
 
 ## 🔐 Key Features
