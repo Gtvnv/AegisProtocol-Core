@@ -11,6 +11,7 @@ O **Aegis Core** é um Middleware de Segurança e Identity Provider (IdP) projet
 - **JWT (JJWT)** com Assinatura Assimétrica (RS256)
 - **Redis** (Token Blacklist & Revocation)
 - **PostgreSQL** (User Store)
+- **HashiCorp Vault** (KMS opcional — `aegis.jwt.key-source=vault`; padrão é arquivo local)
 - **Docker** (Containerização)
 
 ## 🔐 Key Features

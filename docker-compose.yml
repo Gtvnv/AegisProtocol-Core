@@ -25,6 +25,23 @@ services:
     networks:
       - aegis-net
 
+  # 3. KMS/Vault real (satélite KMS/Vault) — dev mode: em memória, root token
+  # fixo, NUNCA use isto em produção como está (é só pra rodar local/CI).
+  # Ative com aegis.jwt.key-source=vault. Antes de subir a app, grave o par
+  # inicial em secret/data/aegis/jwt/current (private_key_pem/public_key_pem).
+  aegis-vault:
+    image: hashicorp/vault:1.15
+    container_name: aegis-vault
+    cap_add:
+      - IPC_LOCK
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: aegis-dev-root-token
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+    ports:
+      - "8200:8200"
+    networks:
+      - aegis-net
+
 networks:
   aegis-net:
     driver: bridge
