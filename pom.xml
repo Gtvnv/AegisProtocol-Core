@@ -12,7 +12,7 @@
 
     <groupId>com.aegisprotocol</groupId>
     <artifactId>aegis-core</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>0.1.0</version>
     <name>AegisProtocol-Core</name>
     <description>Security Middleware with Zero Trust and ABAC capabilities</description>
 
