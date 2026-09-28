@@ -25,6 +25,11 @@ public enum AuditEventType {
     NETWORK_ZONE_CREATED,
     NETWORK_ZONE_DELETED,
 
+    // Policy Audit
+    POLICY_CREATED,
+    POLICY_UPDATED,
+    POLICY_DELETED,
+
     // Tokens
     TOKEN_ISSUED,
     REFRESH_TOKEN_ISSUED,

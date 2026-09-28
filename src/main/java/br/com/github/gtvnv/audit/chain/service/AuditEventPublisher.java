@@ -94,6 +94,24 @@ public class AuditEventPublisher {
                 Map.of("eventCategory", "NETWORK"));
     }
 
+    /**
+     * @param snapshot dados extras do payload (tipicamente "before"/"after" com
+     *                 o Policy resultante) — mesclados por cima do payload padrão.
+     */
+    public void publishPolicyEvent(AuditEventType type,
+                                   String actor,
+                                   String policyId,
+                                   String detail,
+                                   Map<String, Object> snapshot) {
+        Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("eventCategory", "POLICY");
+        payload.put("policyId", nullSafe(policyId));
+        if (snapshot != null) {
+            payload.putAll(snapshot);
+        }
+        publish(type, actor, null, null, null, null, detail, payload);
+    }
+
     public void publishKeyEvent(AuditEventType type,
                                 String actor,
                                 String kid,
