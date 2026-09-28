@@ -17,7 +17,13 @@
   },
   "standingUserInstructions": [
     "Criar branch + PR para cada evolução — nunca commitar direto em main/master.",
-    "Fluxo padrão após um 'pode continuar' do usuário: confirmar merge do PR anterior (gh pr view) → sync main (checkout + merge --ff-only) → apagar branch mergeada (local + remoto) → verificar que o stash/branch do Java25 seguem intocados → criar branch nova para o próximo item do roadmap → implementar com testes → compilar+testar via JDK21 → commit → push → PR → atualizar o doc de compliance → reportar e PARAR (esperar o próximo 'pode continuar').",
+    "Fluxo padrão após um 'pode continuar' do usuário: confirmar merge do PR anterior (gh pr view) → sync main (checkout + merge --ff-only) → apagar branch mergeada (local + remoto) → verificar que o stash/branch do Java25 seguem intocados → criar branch nova para o próximo item do roadmap → implementar com testes → compilar+testar via JDK21 → commit → push → PR → BUMP DE VERSÃO + TAG + GITHUB RELEASE (ver 'versioning' abaixo) → atualizar o doc de compliance → atualizar mcp-server/data/satellites.json → reportar e PARAR (esperar o próximo 'pode continuar').",
     "Atribuição: commits terminam com 'Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>'; corpo de PR termina com '🤖 Generated with [Claude Code](https://claude.com/claude-code)'."
-  ]
+  ],
+  "versioning": {
+    "scheme": "SemVer em pom.xml <version> (sem sufixo -SNAPSHOT — este repo não publica em nenhum artifact repository, então a versão em pom.xml É a versão da release, não um estado de dev). Decidido em 2026-09-28: reiniciado em 0.1.0 (pom.xml estava esquecido em 0.0.1-SNAPSHOT desde o início, README chegou a anunciar v1.2.0 sem nenhuma tag correspondente — inconsistência resolvida escolhendo recomeçar limpo em vez de tentar reconciliar os números antigos).",
+    "cadence": "Uma release por satélite/PR mergeado — não em lote. MINOR bump (0.X.0) por satélite novo; PATCH bump (0.1.X) por fix/incidental sem satélite novo. Nunca pular esse passo: é parte do fluxo padrão logo após o PR mergear, antes de começar o próximo item do roadmap.",
+    "howTo": "1) bump <version> em pom.xml  2) commit isolado ou dentro do PR do satélite (preferir dentro do mesmo PR quando fizer sentido)  3) depois do merge: 'git tag vX.Y.Z && git push origin vX.Y.Z'  4) 'gh release create vX.Y.Z --title \"vX.Y.Z — <nome do satélite>\" --notes \"<resumo>\"'.",
+    "baseline": "v0.1.0 (PR de versionamento) consolida os 14 PRs/12 satélites entregues até 2026-09-28 como o primeiro release real do projeto sob este esquema."
+  }
 }

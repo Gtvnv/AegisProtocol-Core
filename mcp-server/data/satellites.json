@@ -127,7 +127,7 @@
     "name": "Network Sentinel além de IPv4/CIDR",
     "pr": 14,
     "branch": "feat-network-sentinel-ipv6-plus",
-    "status": "open",
+    "status": "merged",
     "summary": "CidrMatcher reescrito pra usar BigInteger em vez de int, suportando IPv4 (32 bits) e IPv6 (128 bits) com a mesma lógica de máscara de bits. Endereço e faixa precisam ser da MESMA versão (nunca casa IPv4 contra faixa IPv6 nem vice-versa, sem normalização de endereços IPv4-mapeados). NetworkZone/NetworkZoneController não precisaram mudar — cidr já era uma String livre, sem validação de formato específica de IPv4.",
     "knownLimitations": ["Continua só inspeção de origem (IP), sem inspeção de payload/protocolo — isso é um item de escopo maior, fora deste satélite."]
   },

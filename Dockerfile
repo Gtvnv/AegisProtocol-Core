@@ -14,8 +14,9 @@ WORKDIR /app
 RUN addgroup -S aegis && adduser -S aegis -G aegis
 USER aegis:aegis
 
-# Copia o JAR gerado no passo anterior
-COPY --from=build /app/target/aegis-core-0.0.1-SNAPSHOT.jar app.jar
+# Copia o JAR gerado no passo anterior (wildcard evita hardcode da versão —
+# nunca mais quebrar o build a cada bump de <version> no pom.xml)
+COPY --from=build /app/target/aegis-core-*.jar app.jar
 
 # Copia a pasta de chaves (O container precisa delas para assinar!)
 # Nota: Em produção real, usaríamos Volumes ou Secrets, mas para MVP copiamos.
