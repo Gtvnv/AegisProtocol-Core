@@ -116,7 +116,7 @@
     "name": "PrivacyGate — encerramento de cadeias legadas",
     "pr": 12,
     "branch": "feat-omega-legacy-actor-closure",
-    "status": "open",
+    "status": "merged",
     "summary": "LegacyActorClosureService varre findAllDistinctActors(), aplica a mesma regra de elegibilidade do ChainAuditListener (exclui ANONYMOUS, já-pseudonimizados, categoria THREAT) e fecha cada cadeia elegível com um entry final LEGACY_ACTOR_CLOSED via chainService.append() DIRETO (nunca via AuditEventPublisher, que pseudonimizaria o actor de novo). Idempotente. POST /api/admin/audit/chain/close-legacy-actors dispara sob demanda — backfill único, não job agendado.",
     "knownLimitations": ["Não é remoção de PII: entries pré-PrivacyGate continuam legíveis em claro pra quem já tinha ROLE_ADMIN. O que muda é o selo auditável do momento da migração."]
   },
@@ -125,11 +125,11 @@
     "wave": "roadmap2",
     "order": 5,
     "name": "Network Sentinel além de IPv4/CIDR",
-    "pr": null,
-    "branch": null,
-    "status": "pending",
-    "summary": "Estender NetworkSentinelFilter/CidrMatcher além de IPv4 (IPv6, possivelmente inspeção adicional). Não iniciado — só começar em um 'pode continuar' explícito.",
-    "knownLimitations": []
+    "pr": 14,
+    "branch": "feat-network-sentinel-ipv6-plus",
+    "status": "open",
+    "summary": "CidrMatcher reescrito pra usar BigInteger em vez de int, suportando IPv4 (32 bits) e IPv6 (128 bits) com a mesma lógica de máscara de bits. Endereço e faixa precisam ser da MESMA versão (nunca casa IPv4 contra faixa IPv6 nem vice-versa, sem normalização de endereços IPv4-mapeados). NetworkZone/NetworkZoneController não precisaram mudar — cidr já era uma String livre, sem validação de formato específica de IPv4.",
+    "knownLimitations": ["Continua só inspeção de origem (IP), sem inspeção de payload/protocolo — isso é um item de escopo maior, fora deste satélite."]
   },
   {
     "id": "retention-purge-runbook",

@@ -16,9 +16,10 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Uma faixa de rede confiável (CIDR IPv4). Ex: name="vpc-interna",
- * cidr="10.0.0.0/8" — origens fora de nenhuma zona habilitada são tratadas
- * como não confiáveis pelo NetworkSentinelFilter nos caminhos protegidos.
+ * Uma faixa de rede confiável (CIDR IPv4 ou IPv6 — ver CidrMatcher). Ex:
+ * name="vpc-interna", cidr="10.0.0.0/8" ou cidr="2001:db8::/32" — origens
+ * fora de nenhuma zona habilitada são tratadas como não confiáveis pelo
+ * NetworkSentinelFilter nos caminhos protegidos.
  */
 @Entity
 @Table(name = "network_zones")
