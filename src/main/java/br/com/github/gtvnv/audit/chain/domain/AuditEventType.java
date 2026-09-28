@@ -51,5 +51,8 @@ public enum AuditEventType {
     SHIELD_REQUEST_BLOCKED,
 
     // KMS/Secrets — rotação de chave de assinatura
-    SIGNING_KEY_ROTATED
+    SIGNING_KEY_ROTATED,
+
+    // PrivacyGate — encerramento de cadeias pré-existentes com actor em claro
+    LEGACY_ACTOR_CLOSED
 }
