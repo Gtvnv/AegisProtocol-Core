@@ -1,0 +1,145 @@
+[
+  {
+    "id": "kms-secrets",
+    "wave": "original",
+    "order": 1,
+    "name": "KMS/Secrets (rotação de chave)",
+    "pr": 2,
+    "branch": "feat-kms-secrets-satellite",
+    "status": "merged",
+    "summary": "KeyManagerService passa a suportar chaves RSA com kid e rotação zero-downtime (POST /api/admin/keys/rotate).",
+    "knownLimitations": ["Fechava A.8.24 apenas parcialmente — sem Vault/KMS externo ainda, só o seam para um (fechado depois pelo item 'kms-vault-real')."]
+  },
+  {
+    "id": "iam-self-service-privacygate",
+    "wave": "original",
+    "order": 2,
+    "name": "IAM Self-Service / PrivacyGate",
+    "pr": 3,
+    "branch": "feat-iam-self-service-privacygate",
+    "status": "merged",
+    "summary": "PrivacyGateService pseudonimiza (HMAC por-titular) o 'actor' do Ômega para toda categoria de evento identidade-vinculada (tudo exceto THREAT). DELETE /auth/account escreve o entry final e então crypto-shreda a chave. GET /auth/account/export cobre portabilidade. GET /api/admin/audit/chain/resolve/{username} é o lookup admin controlado.",
+    "knownLimitations": ["Entries gravadas ANTES deste satélite continuavam com o username em claro como actor para sempre — fechado depois pelo item 'omega-legacy-actor-closure'."]
+  },
+  {
+    "id": "consent-ledger",
+    "wave": "original",
+    "order": 3,
+    "name": "Consent Ledger",
+    "pr": 4,
+    "branch": "feat-consent-ledger-satellite",
+    "status": "merged",
+    "summary": "/auth/register passa a exigir consentVersion (validado fail-fast contra aegis.consent.current-version antes de criar qualquer coisa). Grava ConsentRecord + evento Ω (CONSENT_GIVEN/CONSENT_WITHDRAWN). POST /auth/consent/withdraw registra revogação.",
+    "knownLimitations": ["Revogar consentimento só registrava o fato — não bloqueava login nem congelava a conta. Fechado depois pelo item 'consent-gate'."]
+  },
+  {
+    "id": "retention-engine",
+    "wave": "original",
+    "order": 4,
+    "name": "Retention Engine",
+    "pr": 5,
+    "branch": "feat-retention-engine-satellite",
+    "status": "merged",
+    "summary": "Arquiva (NUNCA apaga) entries antigas do Ômega em lotes NDJSON com RetentionCheckpoint assinado (cursor por-ator, resumível). Agendado diário + POST /api/admin/retention/run sob demanda.",
+    "knownLimitations": ["Purga física continua sendo um passo manual de DBA — mesma filosofia do script de WORM hardening. Roadmap 2 item 'retention-purge-runbook' (pendente) cobriria um runbook documentado para isso."]
+  },
+  {
+    "id": "incident-response-orchestrator",
+    "wave": "original",
+    "order": 5,
+    "name": "Incident Response Orchestrator",
+    "pr": 6,
+    "branch": "feat-incident-response-orchestrator",
+    "status": "merged",
+    "summary": "ShieldThreatEvent em severidade >= HIGH abre um SecurityIncident com prazos de SLA (mais curtos para CRITICAL), ciclo de vida OPEN→ACKNOWLEDGED→NOTIFIED→RESOLVED auditado no Ômega, e varredura automática de estouro de SLA.",
+    "knownLimitations": ["notify() era simulado, sem e-mail/SMS/API-ANPD reais. Fechado depois pelo item 'incident-notification-real'."]
+  },
+  {
+    "id": "network-sentinel",
+    "wave": "original",
+    "order": 6,
+    "name": "Network Sentinel",
+    "pr": 7,
+    "branch": "feat-network-sentinel-satellite",
+    "status": "merged",
+    "summary": "NetworkSentinelFilter roda antes do JWT auth em /api/admin/**, checando IP de origem contra NetworkZone (CIDR) administradas. Fail-open sem zonas configuradas, alert-only por padrão. CORS agora é config-driven (aegis.network.cors-allowed-origins).",
+    "knownLimitations": ["Só IPv4, só origem (sem inspeção de payload/protocolo). Roadmap 2 item 'network-sentinel-ipv6-plus' (pendente) cobriria a extensão."]
+  },
+  {
+    "id": "policy-audit",
+    "wave": "original",
+    "order": 7,
+    "name": "Policy Audit",
+    "pr": 8,
+    "branch": "feat-policy-audit-satellite",
+    "status": "merged",
+    "summary": "Primeira API CRUD para políticas ABAC/RBAC (PolicyController, admin-only — antes só existiam via seed ou acesso direto ao banco), com todo create/update/delete gravando snapshot before/after no Ômega via PolicyAuditService.",
+    "knownLimitations": []
+  },
+  {
+    "id": "kms-vault-real",
+    "wave": "roadmap2",
+    "order": 1,
+    "name": "KMS/Vault real",
+    "pr": 9,
+    "branch": "feat-kms-vault-real",
+    "status": "merged",
+    "summary": "Extraída interface KeyMaterialStore do KeyManagerService (zero mudança de comportamento). VaultKeyMaterialStore chama a API HTTP KV v2 do Vault direto (sem SDK), selecionável via aegis.jwt.key-source=vault (@ConditionalOnProperty). docker-compose ganhou serviço aegis-vault dev.",
+    "knownLimitations": ["Vault usado como cofre de chave (material buscado, assinado localmente), não como delegação total ao Transit engine — a chave privada ainda sai do Vault para assinar."]
+  },
+  {
+    "id": "incident-notification-real",
+    "wave": "roadmap2",
+    "order": 2,
+    "name": "Incident Notification real",
+    "pr": 10,
+    "branch": "feat-incident-notification-real",
+    "status": "merged",
+    "summary": "NotificationProvider (interface) + EmailNotificationProvider via spring-boot-starter-mail, plugado em IncidentOrchestratorService.notify() — e-mail real pro titular (via UserRepository a partir de incident.actor) e pro compliance-team configurado. Status só avança pra NOTIFIED quando OS DOIS envios têm sucesso. docker-compose ganhou MailHog dev (SMTP fake, UI em :8025).",
+    "knownLimitations": []
+  },
+  {
+    "id": "consent-gate",
+    "wave": "roadmap2",
+    "order": 3,
+    "name": "Consent Gate",
+    "pr": 11,
+    "branch": "feat-consent-gate-satellite",
+    "status": "merged",
+    "summary": "AuthService.login() barra emissão de token sem consentimento válido na versão vigente, a menos que o próprio request já traga consentVersion correto (reconsente inline). refreshToken() barra do mesmo jeito, sem caminho de reconsentimento inline (força login novo). Ambos publicam CONSENT_REQUIRED_BLOCKED no Ômega. Incidental: @ExceptionHandler(IllegalArgumentException.class) — username duplicado/refresh inválido caíam em 500 genérico antes.",
+    "knownLimitations": ["Tokens já emitidos antes da revogação continuam válidos até expirar — limitação inerente de JWT stateless, mesma que já existia para desativação de conta."]
+  },
+  {
+    "id": "omega-legacy-actor-closure",
+    "wave": "roadmap2",
+    "order": 4,
+    "name": "PrivacyGate — encerramento de cadeias legadas",
+    "pr": 12,
+    "branch": "feat-omega-legacy-actor-closure",
+    "status": "open",
+    "summary": "LegacyActorClosureService varre findAllDistinctActors(), aplica a mesma regra de elegibilidade do ChainAuditListener (exclui ANONYMOUS, já-pseudonimizados, categoria THREAT) e fecha cada cadeia elegível com um entry final LEGACY_ACTOR_CLOSED via chainService.append() DIRETO (nunca via AuditEventPublisher, que pseudonimizaria o actor de novo). Idempotente. POST /api/admin/audit/chain/close-legacy-actors dispara sob demanda — backfill único, não job agendado.",
+    "knownLimitations": ["Não é remoção de PII: entries pré-PrivacyGate continuam legíveis em claro pra quem já tinha ROLE_ADMIN. O que muda é o selo auditável do momento da migração."]
+  },
+  {
+    "id": "network-sentinel-ipv6-plus",
+    "wave": "roadmap2",
+    "order": 5,
+    "name": "Network Sentinel além de IPv4/CIDR",
+    "pr": null,
+    "branch": null,
+    "status": "pending",
+    "summary": "Estender NetworkSentinelFilter/CidrMatcher além de IPv4 (IPv6, possivelmente inspeção adicional). Não iniciado — só começar em um 'pode continuar' explícito.",
+    "knownLimitations": []
+  },
+  {
+    "id": "retention-purge-runbook",
+    "wave": "roadmap2",
+    "order": 6,
+    "name": "Retention Engine — runbook de purga física",
+    "pr": null,
+    "branch": null,
+    "status": "pending",
+    "summary": "Documentar/formalizar o processo manual de purga física dos arquivos NDJSON arquivados pelo Retention Engine (hoje é um passo manual de DBA, sem runbook). Não iniciado — só começar em um 'pode continuar' explícito.",
+    "knownLimitations": []
+  }
+]

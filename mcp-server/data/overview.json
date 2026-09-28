@@ -1,0 +1,23 @@
+{
+  "project": "AegisProtocol-Core",
+  "repo": "https://github.com/Gtvnv/AegisProtocol-Core",
+  "what": "Middleware de auth (Java 21 / Spring Boot 3.4.2) evoluindo para um Zero-Trust Network Sentinel + Identity Provider para aplicações e sistemas internos.",
+  "z2aRelation": "AegisProtocol-Core é uma peça funcional de um Meta-Framework maior chamado Z2A. As evoluções do AegisProtocol são descritas como 'satélites' consumidos por outros satélites do Z2A.",
+  "scopeBoundary": "TODAS as evoluções do AegisProtocol (PrivacyGate, IAM self-service, KMS/secrets, consent ledger, retention engine, incident response, network sentinel, policy audit, etc.) ficam DENTRO do repositório AegisProtocol-Core. Nenhuma delas se estende ao repositório do Meta-Framework Z2A nem a outros satélites Z2A que apenas consomem o AegisProtocol como IdP. Decisão explícita do usuário — não propor nem fazer mudanças fora deste repo para este trabalho.",
+  "complianceDoc": {
+    "title": "AegisProtocol x ISO 27001 e LGPD - Mapeamento de Compliance",
+    "url": "https://claude.ai/code/artifact/a385794e-f400-44eb-b1ca-5d4c3cc4f819",
+    "type": "Claude Doc (artifact type 'pages') — conteúdo só é lido/escrito pelo conector Claude Docs (read/batch/update), NUNCA pela tool Artifact (publish/read normal não altera o conteúdo do doc).",
+    "note": "O conector Claude Docs já ficou indisponível no meio de sessões anteriores. Quando isso acontece, a atualização do doc fica genuinamente bloqueada — não existe workaround. Avisar o usuário e tentar de novo mais tarde, nunca fingir que atualizou."
+  },
+  "coreArchitecture": {
+    "omegaChain": "br.com.github.gtvnv.audit.chain — cadeia de auditoria hash-encadeada (SHA-256), WORM-hardened (docs/worm-hardening.sql). Cada satélite publica eventos nela via AuditEventPublisher → ChainAuditListener (que também roda o PrivacyGate). A cadeia é por-ator: cada valor de 'actor' tem sua própria sequência independente começando em GENESIS.",
+    "shield": "br.com.github.gtvnv.shield — filtro Zero Trust baseado em lateral-movement/session-fingerprint/IP-intel; emite ShieldThreatEvent.",
+    "privacyGate": "br.com.github.gtvnv.privacy — pseudonimização HMAC-por-titular do campo 'actor' antes da escrita no Ômega, com crypto-shredding na exclusão de conta. Categoria THREAT (actor=IP) nunca é pseudonimizada."
+  },
+  "standingUserInstructions": [
+    "Criar branch + PR para cada evolução — nunca commitar direto em main/master.",
+    "Fluxo padrão após um 'pode continuar' do usuário: confirmar merge do PR anterior (gh pr view) → sync main (checkout + merge --ff-only) → apagar branch mergeada (local + remoto) → verificar que o stash/branch do Java25 seguem intocados → criar branch nova para o próximo item do roadmap → implementar com testes → compilar+testar via JDK21 → commit → push → PR → atualizar o doc de compliance → reportar e PARAR (esperar o próximo 'pode continuar').",
+    "Atribuição: commits terminam com 'Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>'; corpo de PR termina com '🤖 Generated with [Claude Code](https://claude.com/claude-code)'."
+  ]
+}
