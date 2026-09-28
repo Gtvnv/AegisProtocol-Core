@@ -10,6 +10,7 @@ public enum AuditEventType {
     ACCOUNT_DELETED,
     CONSENT_GIVEN,
     CONSENT_WITHDRAWN,
+    CONSENT_REQUIRED_BLOCKED,
     RETENTION_CHECKPOINT_CREATED,
 
     // Incident Response Orchestrator

@@ -7,11 +7,13 @@ import br.com.github.gtvnv.authentication.dto.RegisterRequest;
 import br.com.github.gtvnv.authentication.dto.TokenResponse;
 import br.com.github.gtvnv.authentication.revocation.TokenBlacklistService;
 import br.com.github.gtvnv.authentication.token.TokenService;
+import br.com.github.gtvnv.consent.exception.ConsentRequiredException;
 import br.com.github.gtvnv.consent.service.ConsentService;
 import br.com.github.gtvnv.config.JwtProperties;
 import br.com.github.gtvnv.domain.entity.UserEntity;
 import br.com.github.gtvnv.domain.model.Subject;
 import br.com.github.gtvnv.domain.repository.UserRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -58,6 +60,13 @@ class AuthServiceTest {
 
     @InjectMocks
     private AuthService authService;
+
+    @BeforeEach
+    void setUp() {
+        // Default: titular com consentimento em dia. Lenient porque nem todo
+        // teste chega a exercitar o gate (ex: falha de credencial cai antes).
+        lenient().when(consentService.hasValidCurrentConsent(anyString())).thenReturn(true);
+    }
 
     // -----------------------------------------------------------------------
     // login — soft lock
@@ -155,6 +164,93 @@ class AuthServiceTest {
 
         verify(chainPublisher).publishAuthEvent(
             eq(AuditEventType.LOGIN_FAILURE), eq("alice"), any(), isNull(), any());
+    }
+
+    // -----------------------------------------------------------------------
+    // login — Consent Gate
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("Login sem consentimento válido e sem consentVersion lança ConsentRequiredException")
+    void login_NoValidConsent_NoVersionSubmitted_ThrowsConsentRequired() {
+        Authentication authMock = mockAuthentication("frank", List.of("USER"));
+        UserEntity entity = userEntity("frank", true, Set.of("USER"));
+
+        when(authenticationManager.authenticate(any())).thenReturn(authMock);
+        when(userRepository.findByUsername("frank")).thenReturn(Optional.of(entity));
+        when(consentService.hasValidCurrentConsent("frank")).thenReturn(false);
+        when(consentService.currentRequiredVersion()).thenReturn("2.0");
+
+        assertThatThrownBy(() -> authService.login(new LoginRequest("frank", "pass")))
+            .isInstanceOf(ConsentRequiredException.class)
+            .extracting(ex -> ((ConsentRequiredException) ex).getRequiredVersion())
+            .isEqualTo("2.0");
+
+        verify(tokenService, never()).generateAccessToken(any());
+        verify(consentService, never()).recordConsent(any(), any(), any());
+        verify(chainPublisher).publishAuthEvent(
+            eq(AuditEventType.CONSENT_REQUIRED_BLOCKED), eq("frank"), any(), isNull(), any());
+    }
+
+    @Test
+    @DisplayName("Login sem consentimento válido e com consentVersion em branco é tratado como ausente")
+    void login_NoValidConsent_BlankVersionSubmitted_ThrowsConsentRequired() {
+        Authentication authMock = mockAuthentication("iris", List.of("USER"));
+        UserEntity entity = userEntity("iris", true, Set.of("USER"));
+
+        when(authenticationManager.authenticate(any())).thenReturn(authMock);
+        when(userRepository.findByUsername("iris")).thenReturn(Optional.of(entity));
+        when(consentService.hasValidCurrentConsent("iris")).thenReturn(false);
+        when(consentService.currentRequiredVersion()).thenReturn("2.0");
+
+        assertThatThrownBy(() -> authService.login(new LoginRequest("iris", "pass", "  ")))
+            .isInstanceOf(ConsentRequiredException.class)
+            .extracting(ex -> ((ConsentRequiredException) ex).getRequiredVersion())
+            .isEqualTo("2.0");
+
+        verify(consentService, never()).validateVersion(any());
+        verify(consentService, never()).recordConsent(any(), any(), any());
+        verify(tokenService, never()).generateAccessToken(any());
+    }
+
+    @Test
+    @DisplayName("Login sem consentimento válido, mas com consentVersion correto: reconsente e segue")
+    void login_NoValidConsent_ValidVersionSubmitted_RecordsConsentAndProceeds() {
+        Authentication authMock = mockAuthentication("gina", List.of("USER"));
+        UserEntity entity = userEntity("gina", true, Set.of("USER"));
+
+        when(authenticationManager.authenticate(any())).thenReturn(authMock);
+        when(userRepository.findByUsername("gina")).thenReturn(Optional.of(entity));
+        when(consentService.hasValidCurrentConsent("gina")).thenReturn(false);
+        when(tokenService.generateAccessToken(any())).thenReturn("at");
+        when(tokenService.generateRefreshToken(any())).thenReturn("rt");
+        when(tokenService.extractJti(any())).thenReturn("jti1");
+        when(jwtProperties.getAccessTokenExpiration()).thenReturn(300L);
+
+        authService.login(new LoginRequest("gina", "pass", "2.0"));
+
+        verify(consentService).validateVersion("2.0");
+        verify(consentService).recordConsent(eq("gina"), eq("2.0"), any());
+        verify(tokenService).generateAccessToken(any());
+    }
+
+    @Test
+    @DisplayName("Login sem consentimento válido e com consentVersion errado propaga a exceção de validação")
+    void login_NoValidConsent_InvalidVersionSubmitted_PropagatesValidationException() {
+        Authentication authMock = mockAuthentication("hugo", List.of("USER"));
+        UserEntity entity = userEntity("hugo", true, Set.of("USER"));
+
+        when(authenticationManager.authenticate(any())).thenReturn(authMock);
+        when(userRepository.findByUsername("hugo")).thenReturn(Optional.of(entity));
+        when(consentService.hasValidCurrentConsent("hugo")).thenReturn(false);
+        doThrow(new IllegalArgumentException("Versão de consentimento desatualizada"))
+            .when(consentService).validateVersion("0.1");
+
+        assertThatThrownBy(() -> authService.login(new LoginRequest("hugo", "pass", "0.1")))
+            .isInstanceOf(IllegalArgumentException.class);
+
+        verify(consentService, never()).recordConsent(any(), any(), any());
+        verify(tokenService, never()).generateAccessToken(any());
     }
 
     // -----------------------------------------------------------------------
@@ -383,6 +479,31 @@ class AuthServiceTest {
             eq("eve"), any(), any());
         verify(chainPublisher).publishTokenEvent(eq(AuditEventType.REFRESH_TOKEN_ISSUED),
             eq("eve"), any(), any());
+    }
+
+    @Test
+    @DisplayName("refreshToken sem consentimento válido lança ConsentRequiredException, sem emitir novo token")
+    void refreshToken_NoValidConsent_ThrowsConsentRequired() {
+        String refreshToken = "valid.refresh.token";
+        UserEntity user = userEntity("ivan", true, Set.of("USER"));
+
+        when(tokenBlacklistService.isTokenBlacklisted(refreshToken)).thenReturn(false);
+        when(tokenService.validateAndGetClaims(refreshToken)).thenReturn(null);
+        when(tokenService.isRefreshToken(refreshToken)).thenReturn(true);
+        when(tokenService.extractUsername(refreshToken)).thenReturn("ivan");
+        when(userRepository.findByUsername("ivan")).thenReturn(Optional.of(user));
+        when(consentService.hasValidCurrentConsent("ivan")).thenReturn(false);
+        when(consentService.currentRequiredVersion()).thenReturn("2.0");
+
+        assertThatThrownBy(() -> authService.refreshToken("Bearer " + refreshToken))
+            .isInstanceOf(ConsentRequiredException.class)
+            .extracting(ex -> ((ConsentRequiredException) ex).getRequiredVersion())
+            .isEqualTo("2.0");
+
+        verify(tokenService, never()).generateAccessToken(any());
+        verify(tokenBlacklistService, never()).blacklistToken(any(), anyLong());
+        verify(chainPublisher).publishAuthEvent(
+            eq(AuditEventType.CONSENT_REQUIRED_BLOCKED), eq("ivan"), any(), isNull(), any());
     }
 
     // -----------------------------------------------------------------------
