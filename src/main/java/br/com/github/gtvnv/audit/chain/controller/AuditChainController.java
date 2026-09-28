@@ -4,6 +4,7 @@ import br.com.github.gtvnv.audit.chain.dto.AuditChainEntryDto;
 import br.com.github.gtvnv.audit.chain.dto.ChainVerificationReport;
 import br.com.github.gtvnv.audit.chain.repository.AuditChainRepository;
 import br.com.github.gtvnv.audit.chain.service.ChainIntegrityVerifier;
+import br.com.github.gtvnv.privacy.service.LegacyActorClosureService;
 import br.com.github.gtvnv.privacy.service.PrivacyGateService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -25,6 +26,7 @@ import java.util.Map;
  * GET /api/admin/audit/chain/verify              — verifica todos os atores (forense global)
  * GET /api/admin/audit/chain/entry/{id}          — entry individual por ID
  * GET /api/admin/audit/chain/resolve/{username}  — traduz username → pseudônimo (PrivacyGate)
+ * POST /api/admin/audit/chain/close-legacy-actors — encerra cadeias pré-PrivacyGate com actor em claro
  *
  * Desde o satélite IAM Self-Service, "actor" nas entries é o pseudônimo do
  * titular (ver ChainAuditListener), não mais o username em claro — resolve/
@@ -41,6 +43,7 @@ public class AuditChainController {
     private final AuditChainRepository repository;
     private final ChainIntegrityVerifier verifier;
     private final PrivacyGateService privacyGate;
+    private final LegacyActorClosureService legacyActorClosureService;
 
     @GetMapping("/resolve/{username}")
     public ResponseEntity<Map<String, String>> resolvePseudonym(@PathVariable String username) {
@@ -48,6 +51,17 @@ public class AuditChainController {
                 "username", username,
                 "actor", privacyGate.pseudonymize(username)
         ));
+    }
+
+    /**
+     * Satélite PrivacyGate — encerra (não apaga) cadeias que ainda carregam
+     * username em claro como actor, de antes do PrivacyGate existir. Idempotente:
+     * segura reexecutar. Ver LegacyActorClosureService para o porquê de não
+     * dar pra simplesmente reescrever o actor das entries antigas.
+     */
+    @PostMapping("/close-legacy-actors")
+    public ResponseEntity<LegacyActorClosureService.ClosureResult> closeLegacyActors() {
+        return ResponseEntity.ok(legacyActorClosureService.runClosure());
     }
 
     @GetMapping("/history/{actor}")
