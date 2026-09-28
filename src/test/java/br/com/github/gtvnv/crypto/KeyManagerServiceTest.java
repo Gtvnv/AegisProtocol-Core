@@ -43,7 +43,7 @@ class KeyManagerServiceTest {
     }
 
     private KeyManagerService newlyLoaded() {
-        KeyManagerService service = new KeyManagerService(jwtProperties);
+        KeyManagerService service = new KeyManagerService(jwtProperties, new FileKeyMaterialStore(jwtProperties));
         service.loadKeys();
         return service;
     }
@@ -130,7 +130,7 @@ class KeyManagerServiceTest {
         classpathProps.setPrivateKeyPath("testkeys/private_key.pem");
         classpathProps.setPublicKeyPath("testkeys/public_key.pem");
 
-        KeyManagerService service = new KeyManagerService(classpathProps);
+        KeyManagerService service = new KeyManagerService(classpathProps, new FileKeyMaterialStore(classpathProps));
         service.loadKeys();
 
         assertThrows(IllegalStateException.class, service::rotate);
