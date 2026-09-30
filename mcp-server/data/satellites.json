@@ -136,10 +136,10 @@
     "wave": "roadmap2",
     "order": 6,
     "name": "Retention Engine — runbook de purga física",
-    "pr": null,
-    "branch": null,
-    "status": "pending",
-    "summary": "Documentar/formalizar o processo manual de purga física dos arquivos NDJSON arquivados pelo Retention Engine (hoje é um passo manual de DBA, sem runbook). Não iniciado — só começar em um 'pode continuar' explícito.",
+    "pr": 16,
+    "branch": "feat-retention-purge-runbook",
+    "status": "open",
+    "summary": "docs/retention-purge-runbook.md documenta o procedimento manual passo-a-passo (verificar checksum → backup externo → DELETE por superuser escopado exatamente em actor+fromSequence/toSequence do checkpoint → registrar). RetentionCheckpoint ganhou purgedAt/purgedBy; RetentionEngineService#markPurged (POST /api/admin/retention/checkpoints/{id}/mark-purged) NÃO apaga nada — só registra que o purge já foi feito por fora e publica RETENTION_PHYSICAL_PURGE_RECORDED no Ômega. Chamar markPurged duas vezes pro mesmo checkpoint lança IllegalStateException de propósito (idempotência deliberadamente NÃO aplicada aqui, ao contrário de LegacyActorClosureService — ver o serviço pra entender a diferença).",
     "knownLimitations": []
   }
 ]

@@ -63,4 +63,15 @@ public class RetentionCheckpoint {
 
     @Column(nullable = false)
     private Instant createdAt;
+
+    /**
+     * Null até o purge físico do arquivo + das linhas cobertas por este
+     * checkpoint ser executado manualmente por um DBA (ver docs/retention-purge-runbook.md)
+     * e então registrado via RetentionEngineService#markPurged. Este campo
+     * NUNCA é setado por código de purge automático — este satélite não
+     * apaga nada sozinho, só dá o recibo de que alguém apagou por fora.
+     */
+    private Instant purgedAt;
+
+    private String purgedBy;
 }
