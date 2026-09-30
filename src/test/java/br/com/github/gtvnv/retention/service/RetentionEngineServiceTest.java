@@ -227,4 +227,51 @@ class RetentionEngineServiceTest {
         assertThatThrownBy(() -> service.verify(id))
                 .isInstanceOf(java.util.NoSuchElementException.class);
     }
+
+    // -----------------------------------------------------------------------
+    // markPurged — registra (nunca executa) o purge físico manual
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("markPurged() grava purgedAt/purgedBy e publica RETENTION_PHYSICAL_PURGE_RECORDED")
+    void markPurged_UnpurgedCheckpoint_RecordsPurgeAndPublishesEvent() {
+        UUID id = UUID.randomUUID();
+        RetentionCheckpoint checkpoint = RetentionCheckpoint.builder()
+                .id(id).actor("alice").entryCount(3).build();
+        when(checkpointRepository.findById(id)).thenReturn(Optional.of(checkpoint));
+
+        RetentionCheckpoint result = service.markPurged(id, "dba_root");
+
+        assertThat(result.getPurgedAt()).isNotNull();
+        assertThat(result.getPurgedBy()).isEqualTo("dba_root");
+        verify(chainPublisher).publishRetentionEvent(
+                eq(AuditEventType.RETENTION_PHYSICAL_PURGE_RECORDED), eq("dba_root"), eq(id.toString()), eq(3));
+    }
+
+    @Test
+    @DisplayName("markPurged() em checkpoint já purgado lança IllegalStateException — falha alto, não é idempotente")
+    void markPurged_AlreadyPurgedCheckpoint_Throws() {
+        UUID id = UUID.randomUUID();
+        Instant firstPurge = Instant.now().minusSeconds(3600);
+        RetentionCheckpoint checkpoint = RetentionCheckpoint.builder()
+                .id(id).actor("alice").entryCount(3).purgedAt(firstPurge).purgedBy("dba_root").build();
+        when(checkpointRepository.findById(id)).thenReturn(Optional.of(checkpoint));
+
+        assertThatThrownBy(() -> service.markPurged(id, "outro_dba"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("já foi marcado como purgado");
+
+        verify(checkpointRepository, never()).save(any());
+        verifyNoInteractions(chainPublisher);
+    }
+
+    @Test
+    @DisplayName("markPurged() com id inexistente lança NoSuchElementException")
+    void markPurged_UnknownCheckpoint_Throws() {
+        UUID id = UUID.randomUUID();
+        when(checkpointRepository.findById(id)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.markPurged(id, "dba_root"))
+                .isInstanceOf(java.util.NoSuchElementException.class);
+    }
 }

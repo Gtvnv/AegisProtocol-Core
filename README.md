@@ -1,6 +1,6 @@
 # 🛡️ Aegis Protocol - Core Identity Provider
 
-[![Version](https://img.shields.io/badge/version-0.1.0-blue)](https://github.com/Gtvnv/AegisProtocol-Core/releases)
+[![Version](https://img.shields.io/badge/version-0.2.0-blue)](https://github.com/Gtvnv/AegisProtocol-Core/releases)
 [![Java 21](https://img.shields.io/badge/Powered_by-Java_21-orange)](#)
 [![Status](https://img.shields.io/badge/Status-Em_desenvolvimento_ativo-success)](#)
 
@@ -36,7 +36,7 @@ O **Aegis Core** é um Middleware de Segurança e Identity Provider (IdP) projet
 - **PrivacyGate**: pseudonimização HMAC-por-titular do actor antes de qualquer escrita na trilha de auditoria, com crypto-shredding no direito ao esquecimento — inclusive encerramento auditável de cadeias legadas anteriores ao próprio PrivacyGate.
 - **Consent Ledger + Consent Gate**: registro versionado de consentimento no cadastro, com bloqueio real de login/renovação de sessão quando o consentimento não está na versão vigente.
 - **IAM Self-Service**: exportação de dados (`GET /auth/account/export`) e exclusão de conta com destruição do vínculo de identidade.
-- **Retention Engine**: arquivamento (nunca exclusão) de trilhas antigas em lotes com checkpoint assinado e resumível.
+- **Retention Engine**: arquivamento (nunca exclusão) de trilhas antigas em lotes com checkpoint assinado e resumível. Purga física, quando legalmente exigida, segue um [runbook manual documentado](docs/retention-purge-runbook.md) — a aplicação nunca apaga sozinha, só registra o recibo de que a purga aconteceu.
 
 ### Auditoria e Resposta a Incidentes
 - **Cadeia Ômega**: trilha de auditoria hash-encadeada (SHA-256), WORM-hardened, verificável e resistente a adulteração — uma sequência independente por titular.
@@ -88,6 +88,7 @@ POST   /api/admin/audit/chain/close-legacy-actors      - Encerramento de cadeias
 GET/POST/DELETE /api/admin/network/zones               - CRUD de zonas de rede confiáveis (CIDR IPv4/IPv6).
 GET/POST/PUT/DELETE /api/admin/policies                - CRUD de políticas ABAC/RBAC auditado.
 POST   /api/admin/retention/run                        - Sweep manual de arquivamento de auditoria.
+POST   /api/admin/retention/checkpoints/{id}/mark-purged - Registra purge físico manual já executado (ver docs/retention-purge-runbook.md).
 ```
 
 ## 🔖 Versionamento
@@ -98,7 +99,7 @@ Este repositório segue [SemVer](https://semver.org/) em `pom.xml` (`<version>`)
 2. Uma tag `vX.Y.Z`;
 3. Uma [GitHub Release](https://github.com/Gtvnv/AegisProtocol-Core/releases) com as notas daquela entrega.
 
-**v0.1.0** é a primeira release sob este esquema — consolida os satélites entregues até aqui: KMS/Secrets com rotação, PrivacyGate, Consent Ledger + Consent Gate, Retention Engine, Incident Response Orchestrator (com notificação real), Network Sentinel (IPv4 + IPv6), Policy Audit, KMS/Vault real e o encerramento de cadeias de auditoria legadas.
+**v0.1.0** foi a primeira release sob este esquema. **v0.2.0** fecha o último item do "Roadmap 2" (as lacunas conhecidas identificadas no primeiro round de satélites): o runbook de purga física do Retention Engine — com isso, todas as 13 evoluções mapeadas até aqui (7 satélites originais + 6 itens de follow-up) estão entregues.
 
 ---
 

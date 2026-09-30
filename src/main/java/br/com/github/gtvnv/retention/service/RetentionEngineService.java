@@ -139,6 +139,40 @@ public class RetentionEngineService {
         }
     }
 
+    /**
+     * Registra que o purge físico (arquivo + linhas de audit_chain_entries
+     * cobertas por este checkpoint) foi executado FORA da aplicação, por um
+     * DBA seguindo docs/retention-purge-runbook.md. Este método NUNCA apaga
+     * nada sozinho — só grava o recibo (purgedAt/purgedBy no checkpoint +
+     * evento no Ômega), fechando o rastro auditável do runbook manual.
+     *
+     * Idempotência deliberada: chamar duas vezes pro mesmo checkpoint é
+     * quase sempre um erro do operador (purge duplicado, ou clique
+     * repetido) — falha alto em vez de aceitar silenciosamente, diferente
+     * do padrão usado em LegacyActorClosureService (que varre em lote e
+     * PRECISA ser idempotente pra reexecução seguro).
+     */
+    @Transactional
+    public RetentionCheckpoint markPurged(UUID checkpointId, String byActor) {
+        RetentionCheckpoint checkpoint = checkpointRepository.findById(checkpointId)
+                .orElseThrow(() -> new NoSuchElementException("Checkpoint não encontrado: " + checkpointId));
+
+        if (checkpoint.getPurgedAt() != null) {
+            throw new IllegalStateException(
+                    "Checkpoint " + checkpointId + " já foi marcado como purgado em " + checkpoint.getPurgedAt()
+                            + " por '" + checkpoint.getPurgedBy() + "'.");
+        }
+
+        checkpoint.setPurgedAt(Instant.now());
+        checkpoint.setPurgedBy(byActor);
+        RetentionCheckpoint saved = checkpointRepository.save(checkpoint);
+
+        chainPublisher.publishRetentionEvent(AuditEventType.RETENTION_PHYSICAL_PURGE_RECORDED,
+                byActor, checkpointId.toString(), checkpoint.getEntryCount());
+
+        return saved;
+    }
+
     /** Recalcula o checksum do arquivo arquivado e compara com o gravado no checkpoint — detecta adulteração pós-arquivamento. */
     public VerificationResult verify(UUID checkpointId) {
         RetentionCheckpoint checkpoint = checkpointRepository.findById(checkpointId)

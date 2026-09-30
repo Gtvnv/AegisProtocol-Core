@@ -12,6 +12,7 @@ public enum AuditEventType {
     CONSENT_WITHDRAWN,
     CONSENT_REQUIRED_BLOCKED,
     RETENTION_CHECKPOINT_CREATED,
+    RETENTION_PHYSICAL_PURGE_RECORDED,
 
     // Incident Response Orchestrator
     INCIDENT_OPENED,

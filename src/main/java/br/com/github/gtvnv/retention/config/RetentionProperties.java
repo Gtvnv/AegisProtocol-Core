@@ -13,7 +13,9 @@ import org.springframework.context.annotation.Configuration;
  * (exportar + checkpoint assinado) entries fora da janela de retenção,
  * deixando o purge físico — se um dia for legalmente exigido — como
  * operação manual de superuser/DBA, igual o resto do hardening WORM já
- * assume.
+ * assume. Procedimento documentado em docs/retention-purge-runbook.md;
+ * RetentionEngineService#markPurged registra (não executa) o purge feito
+ * por fora, fechando o rastro auditável.
  */
 @Getter
 @Setter
